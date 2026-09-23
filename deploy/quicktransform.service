@@ -8,7 +8,7 @@ Type=simple
 # User=YOUR_USER
 WorkingDirectory=/opt/quicktransform
 Environment=PYTHONPATH=/opt/quicktransform/src
-ExecStart=__PYTHON__ -m w2md serve --host 0.0.0.0 --port 8000
+ExecStart=__PYTHON__ -m w2md serve --host 0.0.0.0 --port 8080
 Restart=on-failure
 RestartSec=3
 

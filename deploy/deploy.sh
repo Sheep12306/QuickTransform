@@ -8,7 +8,7 @@ set -euo pipefail
 
 APP_DIR=/opt/quicktransform
 SERVICE=quicktransform
-PORT=8000
+PORT=8080
 PY=""
 
 if [ "$(id -u)" -ne 0 ]; then

@@ -67,7 +67,7 @@ sudo bash /opt/quicktransform/deploy/deploy.sh
 
 ```bash
 cd /opt/quicktransform
-PYTHONPATH=src nohup python3 -m w2md serve --host 0.0.0.0 --port 8000 > /var/log/quicktransform.log 2>&1 &
+PYTHONPATH=src nohup python3 -m w2md serve --host 0.0.0.0 --port 8080 > /var/log/quicktransform.log 2>&1 &
 ```
 
 ---
@@ -77,10 +77,10 @@ PYTHONPATH=src nohup python3 -m w2md serve --host 0.0.0.0 --port 8000 > /var/log
 浏览器打开：
 
 ```
-http://<服务器公网IP>:8000
+http://<服务器公网IP>:8080
 ```
 
-⚠️ 云服务器需要在**安全组/防火墙**里放行 `8000` 端口，否则外网连不上。
+⚠️ 云服务器需要在**安全组/防火墙**里放行 `8080` 端口，否则外网连不上。
 
 ---
 
@@ -110,7 +110,7 @@ server {
     client_max_body_size 100m;   # 允许上传较大的 docx/pdf
 
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -144,6 +144,6 @@ sudo systemctl restart quicktransform
 
 ## 常见问题
 
-- **端口访问不了**：先查安全组是否放行 8000；再查 `systemctl status quicktransform` 是否 running；最后看 `journalctl -u quicktransform -n 50`。
+- **端口访问不了**：先查安全组是否放行 8080；再查 `systemctl status quicktransform` 是否 running；最后看 `journalctl -u quicktransform -n 50`。
 - **`pip install lxml` 报错**：用 `pip3 install lxml` 走预编译 wheel；若提示缺编译环境，先 `apt-get install -y build-essential python3-dev libxml2-dev libxslt1-dev`。
 - **上传大文件失败**：确认 nginx 的 `client_max_body_size` 已调大（见第 6 节）。
