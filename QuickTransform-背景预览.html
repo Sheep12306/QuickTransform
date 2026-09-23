@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuickTransform - 背景预览</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --surface: #ffffff;
+      --surface-muted: #f2f8f5;
+      --border: #e2ece6;
+      --border-strong: #cfded5;
+      --text: #17211b;
+      --muted: #5f7568;
+      --accent: #049664;
+      --accent-soft: #e6f7ef;
+      --accent-gradient: linear-gradient(135deg, #049664 0%, #037d53 100%);
+      --shadow-sm: 0 1px 2px rgba(18, 73, 48, .06);
+      --shadow-md: 0 8px 24px rgba(18, 73, 48, .08);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      background: transparent;
+      color: var(--text);
+      font-family: "MiSans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    .liquid-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      background: linear-gradient(180deg, #f7fcf9 0%, #eef9f3 100%);
+    }
+
+    .liquid {
+      position: absolute;
+      border-radius: 46% 54% 60% 40% / 48% 42% 58% 52%;
+      filter: blur(72px);
+      opacity: .52;
+      will-change: transform, border-radius;
+    }
+
+    .liquid-a {
+      width: 54vw;
+      height: 54vw;
+      left: -16vw;
+      top: -20vw;
+      background: radial-gradient(circle at 38% 38%, rgba(4, 150, 100, .48), rgba(4, 150, 100, 0) 68%);
+      animation: liquid-a 18s ease-in-out infinite alternate;
+    }
+
+    .liquid-b {
+      width: 48vw;
+      height: 48vw;
+      right: -12vw;
+      top: 12vh;
+      background: radial-gradient(circle at 60% 55%, rgba(3, 125, 83, .42), rgba(3, 125, 83, 0) 70%);
+      animation: liquid-b 24s ease-in-out infinite alternate;
+    }
+
+    .liquid-c {
+      width: 40vw;
+      height: 40vw;
+      left: 28vw;
+      bottom: -18vw;
+      background: radial-gradient(circle at 50% 50%, rgba(4, 150, 100, .34), rgba(4, 150, 100, 0) 72%);
+      animation: liquid-c 21s ease-in-out infinite alternate;
+    }
+
+    .liquid-bg::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(1200px 520px at 80% -10%, rgba(255, 255, 255, .65), transparent 70%);
+      pointer-events: none;
+    }
+
+    @keyframes liquid-a {
+      from { transform: translate(0, 0) rotate(0deg) scale(1); border-radius: 46% 54% 60% 40% / 48% 42% 58% 52%; }
+      to { transform: translate(10vw, 6vw) rotate(32deg) scale(1.08); border-radius: 58% 42% 40% 60% / 54% 58% 42% 46%; }
+    }
+
+    @keyframes liquid-b {
+      from { transform: translate(0, 0) rotate(0deg) scale(1); border-radius: 58% 42% 40% 60% / 54% 58% 42% 46%; }
+      to { transform: translate(-8vw, 8vh) rotate(-28deg) scale(1.12); border-radius: 44% 56% 62% 38% / 46% 50% 50% 54%; }
+    }
+
+    @keyframes liquid-c {
+      from { transform: translate(0, 0) rotate(0deg) scale(1); border-radius: 44% 56% 62% 38% / 46% 50% 50% 54%; }
+      to { transform: translate(-10vw, -8vh) rotate(24deg) scale(1.06); border-radius: 58% 42% 46% 54% / 52% 44% 56% 48%; }
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      padding: 0 24px;
+      background: rgba(255, 255, 255, .78);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--accent-gradient);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: var(--shadow-sm);
+    }
+    .brand-text h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: 0; }
+    .brand-text p { margin: 1px 0 0; font-size: 12px; color: var(--muted); }
+    .topbar-status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+    .topbar-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
+
+    .home-main { width: min(1060px, calc(100% - 48px)); margin: 0 auto; padding: 54px 0 70px; }
+    .home-hero { margin-bottom: 32px; }
+    .home-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin: 0 0 14px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .home-eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+    .home-hero h2 { margin: 0; font-size: 31px; font-weight: 750; line-height: 1.24; letter-spacing: 0; }
+    .home-hero p { margin: 12px 0 0; color: var(--muted); font-size: 15px; }
+
+    .home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .tool-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-height: 190px;
+      padding: 23px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--text);
+      text-decoration: none;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .tool-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
+    .tool-card.muted { background: #fbfdfc; color: var(--muted); }
+    .tool-card.muted .tool-icon { background: var(--surface-muted); color: var(--muted); }
+    .tool-icon {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 18px;
+      border-radius: 13px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .tool-icon svg { width: 21px; height: 21px; }
+    .tool-card h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; letter-spacing: 0; }
+    .tool-card p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+    .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 16px; }
+    .badge { padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+    .tool-card.muted .badge { background: var(--surface-muted); color: var(--muted); }
+
+    @media (max-width: 680px) {
+      .home-main { width: min(100% - 32px, 1060px); padding: 36px 0 52px; }
+      .home-hero h2 { font-size: 25px; }
+      .home-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .liquid-a, .liquid-b, .liquid-c { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="liquid-bg" aria-hidden="true">
+    <span class="liquid liquid-a"></span>
+    <span class="liquid liquid-b"></span>
+    <span class="liquid liquid-c"></span>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">QT</span>
+      <div class="brand-text">
+        <h1>QuickTransform</h1>
+        <p>本地转换工具箱</p>
+      </div>
+    </div>
+    <div class="topbar-status">本地运行</div>
+  </header>
+
+  <main class="home-main">
+    <section class="home-hero">
+      <p class="home-eyebrow">离线 · 本地 · 不传云端</p>
+      <h2>把常用格式转换，留在自己电脑里</h2>
+      <p>一个窗口完成 Word、Markdown、PDF、图片等常用格式转换。</p>
+    </section>
+
+    <section class="home-grid">
+      <a class="tool-card" href="#">
+        <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="m8 14 3 3 5-6"/></svg></span>
+        <h3>Word 转 Markdown</h3>
+        <p>保留标题、表格、图片与基础样式，适合 PRD 上传云端做记录。</p>
+        <span class="card-foot"><span class="badge">已上线</span></span>
+      </a>
+
+      <a class="tool-card" href="#">
+        <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></span>
+        <h3>PDF 转图片</h3>
+        <p>把 PDF 每一页渲染成清晰图片，适合拆页、归档和分享。</p>
+        <span class="card-foot"><span class="badge">已上线</span></span>
+      </a>
+
+      <a class="tool-card muted" href="#">
+        <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg></span>
+        <h3>Excel 转 CSV</h3>
+        <p>用于表格数据导出，后续按需加入。</p>
+        <span class="card-foot"><span class="badge">规划中</span></span>
+      </a>
+
+      <a class="tool-card" href="#">
+        <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 17h8"/><path d="M8 13h5"/></svg></span>
+        <h3>PDF 转 Word</h3>
+        <p>把 PDF 还原成可编辑 Word 文档，方便继续修改和排版。</p>
+        <span class="card-foot"><span class="badge">已上线</span></span>
+      </a>
+    </section>
+  </main>
+</body>
+</html>

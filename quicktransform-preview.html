@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickTransform - 液态玻璃预览</title>
+  <style>
+    :root {
+      --text-primary: #1a2e1a;
+      --text-secondary: #5a6b5a;
+      --accent: #2d8a5e;
+      --accent-soft: #e8f5ee;
+      --badge-live: #2d8a5e;
+      --badge-plan: #7a8a7a;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      overflow-x: hidden;
+    }
+
+    body {
+      background: #f4faf6;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    /* ========== 偏白 + 淡绿流体背景 ========== */
+    .fluid-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      background: linear-gradient(165deg, #f7fcf9 0%, #eef8f2 40%, #f2faf5 70%, #f8fcfa 100%);
+    }
+
+    .fluid-blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.42;
+      animation: float 16s ease-in-out infinite;
+      will-change: transform;
+    }
+
+    .blob-1 {
+      width: 560px;
+      height: 560px;
+      background: radial-gradient(circle, #b8e0c8 0%, transparent 70%);
+      top: -15%;
+      left: -10%;
+      animation-duration: 20s;
+    }
+
+    .blob-2 {
+      width: 480px;
+      height: 480px;
+      background: radial-gradient(circle, #a8d8bc 0%, transparent 70%);
+      top: 35%;
+      right: -12%;
+      animation-duration: 24s;
+      animation-delay: -4s;
+    }
+
+    .blob-3 {
+      width: 420px;
+      height: 420px;
+      background: radial-gradient(circle, #c5e8d4 0%, transparent 70%);
+      bottom: -10%;
+      left: 20%;
+      animation-duration: 18s;
+      animation-delay: -7s;
+    }
+
+    .blob-4 {
+      width: 360px;
+      height: 360px;
+      background: radial-gradient(circle, #b0dcc8 0%, transparent 70%);
+      top: 10%;
+      left: 40%;
+      animation-duration: 22s;
+      animation-delay: -2s;
+    }
+
+    .blob-5 {
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, #d0edd8 0%, transparent 70%);
+      bottom: 20%;
+      right: 25%;
+      animation-duration: 19s;
+      animation-delay: -9s;
+    }
+
+    .blob-6 {
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, #c0e4d0 0%, transparent 70%);
+      top: 55%;
+      left: 5%;
+      animation-duration: 21s;
+      animation-delay: -6s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      20% { transform: translate(50px, -40px) scale(1.1); }
+      40% { transform: translate(-30px, 60px) scale(0.92); }
+      60% { transform: translate(40px, 30px) scale(1.06); }
+      80% { transform: translate(-50px, -20px) scale(0.97); }
+    }
+
+    /* 鼠标跟随淡绿光晕 */
+    .mouse-glow {
+      position: fixed;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(160, 210, 180, 0.25) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 1;
+      transform: translate(-50%, -50%);
+      transition: opacity 0.4s ease;
+      opacity: 0;
+      filter: blur(50px);
+      will-change: left, top;
+    }
+
+    .mouse-glow.active {
+      opacity: 1;
+    }
+
+    /* ========== 顶部导航（对齐原设计） ========== */
+    .header {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 36px;
+      background: rgba(255, 255, 255, 0.72);
+      backdrop-filter: blur(20px) saturate(1.3);
+      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      border-bottom: 1px solid rgba(230, 240, 235, 0.8);
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      background: #2d8a5e;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: -0.02em;
+      box-shadow: 0 2px 8px rgba(45, 138, 94, 0.25);
+    }
+
+    .logo-text h1 {
+      font-size: 17px;
+      font-weight: 600;
+      color: #1a2e1a;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .logo-text p {
+      font-size: 12px;
+      color: #6a7a6a;
+      margin-top: 1px;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      color: #5a6b5a;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background: #2d8a5e;
+      border-radius: 50%;
+      box-shadow: 0 0 6px rgba(45, 138, 94, 0.5);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.65; transform: scale(1.2); }
+    }
+
+    /* ========== 主内容 ========== */
+    .main {
+      position: relative;
+      z-index: 5;
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 56px 24px 80px;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 44px;
+    }
+
+    .badge-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(232, 245, 238, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(200, 230, 210, 0.6);
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      color: #3d6b4f;
+      margin-bottom: 18px;
+    }
+
+    .badge-row .dot {
+      width: 6px;
+      height: 6px;
+      background: #2d8a5e;
+      border-radius: 50%;
+    }
+
+    .hero h2 {
+      font-size: 30px;
+      font-weight: 700;
+      color: #1a2e1a;
+      letter-spacing: -0.03em;
+      line-height: 1.35;
+      margin-bottom: 10px;
+    }
+
+    .hero p {
+      font-size: 14.5px;
+      color: #5a6b5a;
+      line-height: 1.6;
+    }
+
+    /* ========== 液态玻璃卡片（对齐原布局） ========== */
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .card {
+      position: relative;
+      background: rgba(255, 255, 255, 0.72);
+      backdrop-filter: blur(28px) saturate(1.35);
+      -webkit-backdrop-filter: blur(28px) saturate(1.35);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      border-radius: 16px;
+      padding: 24px 22px 20px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                  box-shadow 0.32s ease,
+                  border-color 0.25s ease,
+                  background 0.25s ease;
+      box-shadow:
+        0 4px 20px rgba(80, 120, 100, 0.05),
+        0 1px 4px rgba(0, 0, 0, 0.03),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 第一张卡片顶部绿色细线（对齐原设计） */
+    .card.featured {
+      border-top: 2.5px solid #2d8a5e;
+    }
+
+    /* 液态高光 */
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      background: linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.65) 0%,
+        transparent 40%,
+        transparent 70%,
+        rgba(255, 255, 255, 0.15) 100%
+      );
+      pointer-events: none;
+      opacity: 0.75;
+      transition: opacity 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      background: rgba(255, 255, 255, 0.85);
+      border-color: rgba(255, 255, 255, 1);
+      box-shadow:
+        0 12px 36px rgba(80, 120, 100, 0.09),
+        0 2px 8px rgba(0, 0, 0, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 1);
+    }
+
+    .card:hover::before {
+      opacity: 1;
+    }
+
+    /* 波纹容器 */
+    .ripple-container {
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      /* 带一点淡绿的波纹，更易在白色上看到 */
+      background: radial-gradient(circle, rgba(180, 220, 195, 0.55) 0%, rgba(200, 230, 210, 0.25) 50%, transparent 70%);
+      transform: scale(0);
+      animation: ripple-anim 0.75s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes ripple-anim {
+      to {
+        transform: scale(4.2);
+        opacity: 0;
+      }
+    }
+
+    .card-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 11px;
+      background: #e8f5ee;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .card-icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: #2d8a5e;
+      fill: none;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a2e1a;
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+      position: relative;
+      z-index: 2;
+    }
+
+    .card p {
+      font-size: 13px;
+      color: #5a6b5a;
+      line-height: 1.55;
+      margin-bottom: 16px;
+      flex: 1;
+      position: relative;
+      z-index: 2;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      z-index: 2;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 12px;
+      padding: 3px 11px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    .tag-live {
+      background: #e8f5ee;
+      color: #2d8a5e;
+    }
+
+    .tag-plan {
+      background: #eef0ee;
+      color: #7a8a7a;
+    }
+
+    .card-arrow {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(232, 245, 238, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #2d8a5e;
+      font-size: 14px;
+      transition: background 0.25s ease, transform 0.25s ease;
+    }
+
+    .card:hover .card-arrow {
+      background: #e0f0e6;
+      transform: translateX(2px);
+    }
+
+    @media (max-width: 640px) {
+      .cards {
+        grid-template-columns: 1fr;
+      }
+      .hero h2 {
+        font-size: 24px;
+      }
+      .header {
+        padding: 14px 20px;
+      }
+      .main {
+        padding: 36px 16px 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 流体背景 -->
+  <div class="fluid-bg">
+    <div class="fluid-blob blob-1"></div>
+    <div class="fluid-blob blob-2"></div>
+    <div class="fluid-blob blob-3"></div>
+    <div class="fluid-blob blob-4"></div>
+    <div class="fluid-blob blob-5"></div>
+    <div class="fluid-blob blob-6"></div>
+  </div>
+
+  <!-- 鼠标跟随光晕 -->
+  <div class="mouse-glow" id="mouseGlow"></div>
+
+  <!-- 顶部导航 -->
+  <header class="header">
+    <div class="logo-area">
+      <div class="logo">QT</div>
+      <div class="logo-text">
+        <h1>QuickTransform</h1>
+        <p>本地转换工具箱</p>
+      </div>
+    </div>
+    <div class="status">
+      <span class="status-dot"></span>
+      本地运行
+    </div>
+  </header>
+
+  <!-- 主内容 -->
+  <main class="main">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="dot"></span>
+        离线 · 本地 · 不传云端
+      </div>
+      <h2>把常用格式转换，留在自己电脑里</h2>
+      <p>一个窗口完成 Word、Markdown、PDF、图片等常用格式转换。</p>
+    </div>
+
+    <div class="cards">
+      <!-- Card 1 - featured with green top border -->
+      <div class="card featured" data-card>
+        <div class="ripple-container"></div>
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h3>Word 转 Markdown</h3>
+        <p>保留标题、表格、图片与基础样式，适合 PRD 上传云端做记录。</p>
+        <div class="card-footer">
+          <span class="tag tag-live">已上线</span>
+          <span class="card-arrow">→</span>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="card" data-card>
+        <div class="ripple-container"></div>
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <h3>PDF 转图片</h3>
+        <p>把 PDF 每一页渲染成清晰图片，适合拆页、归档和分享。</p>
+        <div class="card-footer">
+          <span class="tag tag-live">已上线</span>
+          <span class="card-arrow">→</span>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="card" data-card>
+        <div class="ripple-container"></div>
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        </div>
+        <h3>Excel 转 CSV</h3>
+        <p>用于表格数据导出，后续按需加入。</p>
+        <div class="card-footer">
+          <span class="tag tag-plan">规划中</span>
+          <span class="card-arrow">→</span>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="card" data-card>
+        <div class="ripple-container"></div>
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h3>PDF 转 Word</h3>
+        <p>把 PDF 还原成可编辑 Word 文档，方便继续修改和排版。</p>
+        <div class="card-footer">
+          <span class="tag tag-live">已上线</span>
+          <span class="card-arrow">→</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ========== 鼠标跟随流体光晕 ==========
+    const glow = document.getElementById('mouseGlow');
+    let mouseX = 0, mouseY = 0;
+    let glowX = 0, glowY = 0;
+
+    document.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      glow.classList.add('active');
+    });
+
+    document.addEventListener('mouseleave', () => {
+      glow.classList.remove('active');
+    });
+
+    function animateGlow() {
+      glowX += (mouseX - glowX) * 0.08;
+      glowY += (mouseY - glowY) * 0.08;
+      glow.style.left = glowX + 'px';
+      glow.style.top = glowY + 'px';
+      requestAnimationFrame(animateGlow);
+    }
+    animateGlow();
+
+    // ========== 卡片悬停 / 滑动波纹（带淡绿） ==========
+    document.querySelectorAll('[data-card]').forEach(card => {
+      const container = card.querySelector('.ripple-container');
+
+      card.addEventListener('mouseenter', (e) => {
+        createRipple(e, container, card);
+      });
+
+      let lastRipple = 0;
+      card.addEventListener('mousemove', (e) => {
+        const now = Date.now();
+        if (now - lastRipple > 380) {
+          createRipple(e, container, card, true);
+          lastRipple = now;
+        }
+      });
+    });
+
+    function createRipple(e, container, card, soft = false) {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const size = Math.max(rect.width, rect.height) * 0.65;
+
+      const ripple = document.createElement('span');
+      ripple.className = 'ripple';
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = (x - size / 2) + 'px';
+      ripple.style.top = (y - size / 2) + 'px';
+      if (soft) {
+        ripple.style.background = 'radial-gradient(circle, rgba(180, 220, 195, 0.32) 0%, rgba(200, 230, 210, 0.12) 50%, transparent 70%)';
+        ripple.style.animationDuration = '1s';
+      }
+      container.appendChild(ripple);
+
+      ripple.addEventListener('animationend', () => ripple.remove());
+    }
+
+    // 背景 blob 轻微跟随鼠标
+    const blobs = document.querySelectorAll('.fluid-blob');
+    document.addEventListener('mousemove', (e) => {
+      const cx = (e.clientX / window.innerWidth - 0.5) * 22;
+      const cy = (e.clientY / window.innerHeight - 0.5) * 22;
+      blobs.forEach((blob, i) => {
+        const factor = (i + 1) * 0.22;
+        blob.style.transform = `translate(${cx * factor}px, ${cy * factor}px)`;
+      });
+    });
+  </script>
+</body>
+</html>

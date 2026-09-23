@@ -1,0 +1,6 @@
+# QuickTransform 服务器运行依赖（Linux）
+lxml>=5
+openpyxl>=3
+xlrd>=2
+python-docx>=1
+pdf2docx>=0.5

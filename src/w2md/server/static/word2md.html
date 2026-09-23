@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuickTransform</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">W&#8594;M</span>
+      <div class="brand-text">
+        <h1>QuickTransform</h1>
+        <p>Word 转 Markdown</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="home-link" href="/">返回首页</a>
+      <div class="topbar-status">本地运行</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div class="mode-row">
+      <label class="switch">
+        <input type="checkbox" id="style-toggle">
+        <span class="switch-track"></span>
+      </label>
+      <span class="mode-label">保留颜色 / 下划线样式</span>
+      <div class="help-wrap">
+        <button class="help-btn" type="button" aria-label="样式保留说明" aria-describedby="style-help-tip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a2.9 2.9 0 0 1 5.8 0c0 2-2.9 2.5-2.9 4"/><path d="M12 17h.01"/></svg>
+        </button>
+        <div class="help-tip" id="style-help-tip" role="tooltip">
+          <span class="help-tip-item"><strong>开启</strong>：颜色、高亮、下划线会用 HTML 标签保留，例如 <code>&lt;span&gt;</code>、<code>&lt;mark&gt;</code>、<code>&lt;u&gt;</code>。部分 Markdown 编辑器或云端平台不支持 HTML，可能显示为源码或不渲染。</span>
+          <span class="help-tip-item"><strong>关闭</strong>：这些样式会转为纯 Markdown 文本，跨平台兼容性最好，但会丢失颜色、高亮和下划线样式。</span>
+        </div>
+      </div>
+      <span class="mode-sep"></span>
+      <span class="mode-label">图片</span>
+      <div class="segmented" id="asset-mode" role="group" aria-label="图片处理方式">
+        <button class="seg active" type="button" data-value="folder">文件夹</button>
+        <button class="seg" type="button" data-value="base64">内嵌</button>
+        <button class="seg" type="button" data-value="placeholder">占位符</button>
+      </div>
+      <div class="help-wrap">
+        <button class="help-btn" type="button" aria-label="图片模式说明" aria-describedby="asset-help-tip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a2.9 2.9 0 0 1 5.8 0c0 2-2.9 2.5-2.9 4"/><path d="M12 17h.01"/></svg>
+        </button>
+        <div class="help-tip" id="asset-help-tip" role="tooltip">
+          <span class="help-tip-item"><strong>文件夹</strong>：图片单独保存，Markdown 引用相对路径，源码短、便于编辑。</span>
+          <span class="help-tip-item"><strong>内嵌</strong>：图片转成 Base64 直接写进 Markdown，一个文件即可带走，但源码会很长。</span>
+          <span class="help-tip-item"><strong>占位符</strong>：只保留插入位置提示，图片后续手动插入，适合检查正文。</span>
+        </div>
+      </div>
+    </div>
+    <section class="drop-panel" id="drop-panel">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择或拖入 Word 文档">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9"/><path d="m8 16 4-4 4 4"/></svg>
+        <p class="dropzone-title">拖入 .docx 文件，或点击选择</p>
+        <p class="dropzone-hint">文档只在本机处理，不会上传</p>
+        <input type="file" id="file-input" accept=".docx" hidden>
+      </div>
+    </section>
+
+    <section class="status-panel hidden" id="status-panel">
+      <div class="spinner"></div>
+      <p id="status-text">正在转换</p>
+    </section>
+
+    <section class="result hidden" id="result">
+      <div class="toolbar">
+        <div class="file" id="report-file"></div>
+        <div class="toolbar-actions">
+          <button class="icon-btn" id="copy-btn" type="button" title="复制 Markdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
+          <button class="icon-btn" id="download-btn" type="button" title="下载 .md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></button>
+          <button class="icon-btn" id="reset-btn" type="button" title="重新选择"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+
+      <div class="panes">
+        <div class="pane">
+          <div class="pane-head">
+            渲染预览
+            <button class="pane-head-btn" id="preview-copy-btn" type="button">复制</button>
+          </div>
+          <div class="pane-body preview" id="preview"></div>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            Markdown 源码
+            <button class="pane-head-btn" id="source-copy-btn" type="button">复制</button>
+          </div>
+          <div class="source-wrap">
+            <textarea class="code" id="source" readonly spellcheck="false"></textarea>
+            <div class="source-marker" id="source-marker"></div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="report">
+        <div class="report-summary">
+          <span class="stat" id="stat-lines">行数 <b>0</b></span>
+          <span class="stat" id="stat-chars">字数 <b>0</b></span>
+          <span class="stat" id="stat-images">图片 <b>0</b></span>
+          <span class="stat stat-warn" id="stat-warnings">警告 <b>0</b></span>
+        </div>
+        <ul class="warnings hidden" id="warnings"></ul>
+      </footer>
+    </section>
+  </main>
+
+  <div class="lightbox hidden" id="lightbox" role="dialog" aria-modal="true" aria-label="图片预览">
+    <button class="lightbox-close" id="lightbox-close" type="button" aria-label="关闭预览"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <img class="lightbox-img" id="lightbox-img" alt="">
+    <p class="lightbox-caption" id="lightbox-caption"></p>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

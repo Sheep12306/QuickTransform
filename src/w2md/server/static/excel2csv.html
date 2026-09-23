@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuickTransform - Excel 转 CSV</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="excel2csv.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">E&#8594;C</span>
+      <div class="brand-text">
+        <h1>QuickTransform</h1>
+        <p>Excel 转 CSV</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="home-link" href="/">返回首页</a>
+      <div class="topbar-status">本地运行</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="drop-panel" id="drop-panel">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择或拖入 Excel 文件">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="m8 14 3 3 5-6"/></svg>
+        <p class="dropzone-title">拖入 .xlsx 或 .xls 文件，或点击选择</p>
+        <p class="dropzone-hint">文档只在本机处理，不会上传</p>
+        <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
+      </div>
+    </section>
+
+    <section class="status-panel hidden" id="status-panel">
+      <div class="spinner"></div>
+      <p id="status-text">正在转换</p>
+    </section>
+
+    <section class="result hidden" id="result">
+      <div class="toolbar">
+        <div class="file" id="report-file"></div>
+        <div class="toolbar-actions">
+          <button class="icon-btn" id="download-btn" type="button" title="下载当前 CSV"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></button>
+          <button class="icon-btn" id="zip-btn" type="button" title="下载全部 CSV 压缩包"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></button>
+          <button class="icon-btn" id="reset-btn" type="button" title="重新选择"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+      <div class="sheet-tabs" id="sheet-tabs"></div>
+      <div class="table-wrap" id="table-wrap">
+        <table id="data-table"></table>
+      </div>
+      <p class="preview-hint">仅预览每个工作表的前 200 行，CSV 文件包含全部数据。</p>
+    </section>
+  </main>
+
+  <script src="excel2csv.js"></script>
+</body>
+</html>

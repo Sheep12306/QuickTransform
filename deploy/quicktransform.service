@@ -1,0 +1,16 @@
+[Unit]
+Description=QuickTransform converter web UI
+After=network.target
+
+[Service]
+Type=simple
+# 如需以专用用户运行，取消注释并把 YOUR_USER 换成实际用户名
+# User=YOUR_USER
+WorkingDirectory=/opt/quicktransform
+Environment=PYTHONPATH=/opt/quicktransform/src
+ExecStart=/usr/bin/python3 -m w2md serve --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuickTransform - Markdown 阅读器</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mdreader.css">
+</head>
+<body data-theme="light" data-accent="green">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">M&#8594;R</span>
+      <div class="brand-text">
+        <h1>QuickTransform</h1>
+        <p>Markdown 阅读器</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="home-link" href="/">返回首页</a>
+      <div class="topbar-status">本地运行</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div class="mode-row">
+      <span class="mode-label">主题</span>
+      <div class="segmented" id="theme-mode" role="group" aria-label="阅读主题">
+        <button class="seg active" type="button" data-value="light">浅色</button>
+        <button class="seg" type="button" data-value="eye">护眼</button>
+        <button class="seg" type="button" data-value="dark">深色</button>
+      </div>
+      <span class="mode-sep"></span>
+      <span class="mode-label">主题色</span>
+      <div class="swatches" id="accent-mode" role="group" aria-label="主题色">
+        <button class="swatch active" type="button" data-value="green" aria-label="绿色主题" style="--swatch: #049664"></button>
+        <button class="swatch" type="button" data-value="blue" aria-label="蓝色主题" style="--swatch: #2563eb"></button>
+        <button class="swatch" type="button" data-value="orange" aria-label="橙色主题" style="--swatch: #c8641b"></button>
+      </div>
+    </div>
+
+    <section class="drop-panel" id="drop-panel">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择或拖入 Markdown 文件">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="m8 14 3 3 5-6"/></svg>
+        <p class="dropzone-title">拖入 .md 文件，或点击选择</p>
+        <p class="dropzone-hint">文档只在本机处理，不会上传</p>
+        <input type="file" id="file-input" accept=".md,.markdown" hidden>
+      </div>
+    </section>
+
+    <section class="result hidden" id="result">
+      <div class="toolbar">
+        <div class="file" id="report-file"></div>
+        <div class="toolbar-actions">
+          <button class="icon-btn" id="copy-btn" type="button" title="复制 Markdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
+          <button class="icon-btn" id="reset-btn" type="button" title="重新选择"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+
+      <div class="panes reader-panes">
+        <div class="pane source-pane">
+          <div class="pane-head">
+            Markdown 源码
+            <button class="pane-head-btn" id="source-copy-btn" type="button">复制</button>
+          </div>
+          <div class="source-wrap">
+            <textarea class="code" id="source" spellcheck="false" placeholder="粘贴或输入 Markdown 源码"></textarea>
+          </div>
+        </div>
+        <div class="pane reader-pane">
+          <div class="pane-head">
+            渲染预览
+            <button class="pane-head-btn" id="fullscreen-btn" type="button">全屏阅读</button>
+          </div>
+          <div class="pane-body preview" id="preview"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="preview.js"></script>
+  <script src="mdreader.js"></script>
+</body>
+</html>

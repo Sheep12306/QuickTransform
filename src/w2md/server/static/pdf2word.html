@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuickTransform - PDF 转 Word</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="pdf2word.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">P&#8594;W</span>
+      <div class="brand-text">
+        <h1>QuickTransform</h1>
+        <p>PDF 转 Word</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="home-link" href="/">返回首页</a>
+      <div class="topbar-status">本地运行</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="drop-panel" id="drop-panel">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择或拖入 PDF 文档">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="m8 14 3 3 5-6"/></svg>
+        <p class="dropzone-title">拖入 .pdf 文件，或点击选择</p>
+        <p class="dropzone-hint">文档只在本机处理，不会上传</p>
+        <input type="file" id="file-input" accept=".pdf" hidden>
+      </div>
+    </section>
+
+    <section class="status-panel hidden" id="status-panel">
+      <div class="spinner"></div>
+      <p id="status-text">正在转换</p>
+    </section>
+
+    <section class="result hidden" id="result">
+      <div class="toolbar">
+        <div class="file" id="report-file"></div>
+        <div class="toolbar-actions">
+          <button class="icon-btn" id="download-btn" type="button" title="下载 Word 文档"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></button>
+          <button class="icon-btn" id="reset-btn" type="button" title="重新选择"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-head">内容预览</div>
+        <div class="pane-body preview" id="word-preview"></div>
+      </div>
+      <p class="preview-hint">预览展示转换后的文本内容，Word 实际版式可能略有差异。</p>
+    </section>
+  </main>
+
+  <script src="preview.js"></script>
+  <script src="pdf2word.js"></script>
+</body>
+</html>

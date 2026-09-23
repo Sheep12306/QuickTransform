@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuickTransform - PDF 转图片</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="pdf2image.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">P&#8594;I</span>
+      <div class="brand-text">
+        <h1>QuickTransform</h1>
+        <p>PDF 转图片</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="home-link" href="/">返回首页</a>
+      <div class="topbar-status">本地运行</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div class="mode-row">
+      <span class="mode-label">输出格式</span>
+      <div class="segmented" id="format-mode" role="group" aria-label="输出图片格式">
+        <button class="seg active" type="button" data-value="png">PNG</button>
+        <button class="seg" type="button" data-value="jpg">JPG</button>
+      </div>
+      <div class="help-wrap">
+        <button class="help-btn" type="button" aria-label="输出格式说明" aria-describedby="format-help-tip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a2.9 2.9 0 0 1 5.8 0c0 2-2.9 2.5-2.9 4"/><path d="M12 17h.01"/></svg>
+        </button>
+        <div class="help-tip" id="format-help-tip" role="tooltip">
+          <span class="help-tip-item"><strong>PNG</strong>：无损压缩，文字边缘更清晰，文件稍大。</span>
+          <span class="help-tip-item"><strong>JPG</strong>：有损压缩，文件更小，适合图片较多的页面。</span>
+        </div>
+      </div>
+    </div>
+
+    <section class="drop-panel" id="drop-panel">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择或拖入 PDF 文档">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="m8 14 3 3 5-6"/></svg>
+        <p class="dropzone-title">拖入 .pdf 文件，或点击选择</p>
+        <p class="dropzone-hint">文档只在本机处理，不会上传</p>
+        <input type="file" id="file-input" accept=".pdf" hidden>
+      </div>
+    </section>
+
+    <section class="status-panel hidden" id="status-panel">
+      <div class="spinner"></div>
+      <p id="status-text">正在转换</p>
+    </section>
+
+    <section class="result hidden" id="result">
+      <div class="toolbar">
+        <div class="file" id="report-file"></div>
+        <div class="toolbar-actions">
+          <button class="icon-btn" id="download-btn" type="button" title="下载全部图片"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></button>
+          <button class="icon-btn" id="reset-btn" type="button" title="重新选择"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+      <div class="pages-grid" id="pages-grid"></div>
+    </section>
+  </main>
+
+  <div class="lightbox hidden" id="lightbox" role="dialog" aria-modal="true" aria-label="图片预览">
+    <button class="lightbox-close" id="lightbox-close" type="button" aria-label="关闭预览"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <img class="lightbox-img" id="lightbox-img" alt="">
+    <p class="lightbox-caption" id="lightbox-caption"></p>
+    <button class="lightbox-download" id="lightbox-download" type="button" aria-label="下载当前图片"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>下载图片</button>
+  </div>
+
+  <script src="pdf2image.js"></script>
+</body>
+</html>
