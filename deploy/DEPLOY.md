@@ -45,7 +45,13 @@ sudo apt-get install -y python3 python3-pip python3-venv poppler-utils
 sudo pip3 install -r /opt/quicktransform/deploy/requirements.txt
 ```
 
-**CentOS / 阿里云 Linux / 龙蜥**：把上面 `apt-get` 换成 `yum`（`python3`、`python3-pip` 包名相同）。
+**CentOS / 阿里云 Linux / 龙蜥（Anolis）**：这类系统默认的 `python3` 常是 3.6，**太老跑不了**（代码需要 3.7+，依赖需要 3.8+），必须另装新版本：
+
+```bash
+sudo dnf install -y python3.11 python3.11-pip   # 若提示 No match，改用 python3.9
+```
+
+装完后所有命令里的 `python3` 要换成 `python3.11`（或 `python3.9`）。推荐直接用第 3 节的一键脚本，它会自动选对 Python 版本。
 
 ---
 
