@@ -42,6 +42,9 @@ jobs:
           eval "$(ssh-agent -s)"
           printf '%s' "$DEPLOY_KEY" | tr -d '\r' | ssh-add -
           echo "ssh-add rc=$?"
+          DEPLOY_USER="$(printf '%s' "$DEPLOY_USER" | tr -d '[:space:]')"
+          DEPLOY_HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')"
+          echo "connecting to ${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
