@@ -8,6 +8,7 @@
   var reportFile = document.getElementById("report-file");
   var wordPreview = document.getElementById("word-preview");
   var downloadBtn = document.getElementById("download-btn");
+  var copyBtn = document.getElementById("copy-btn");
   var resetBtn = document.getElementById("reset-btn");
 
   var current = { filename: "", downloadUrl: null };
@@ -67,6 +68,7 @@
       current.filename = res.data.filename;
       current.downloadUrl = res.data.download_url || null;
       current.outputName = res.data.output_name || null;
+      current.markdown = res.data.preview_markdown || "";
       reportFile.textContent = res.data.filename;
       QuickPreview.render(res.data.preview_markdown || "", wordPreview);
       show(result);
@@ -122,6 +124,22 @@
       document.body.removeChild(anchor);
     }
   });
+
+  copyBtn.addEventListener("click", function () {
+    navigator.clipboard.writeText(current.markdown || "").then(function () {
+      flash(copyBtn);
+    });
+  });
+
+  function flash(btn) {
+    var original = btn.style.background;
+    btn.style.background = "var(--accent)";
+    btn.style.color = "#ffffff";
+    setTimeout(function () {
+      btn.style.background = original;
+      btn.style.color = "";
+    }, 600);
+  }
 
   resetBtn.addEventListener("click", reset);
 })();
