@@ -17,6 +17,8 @@ jobs:
         with:
           switches: >-
             -avz
+            --no-owner
+            --no-group
             --exclude='.git/'
             --exclude='.github/'
             --exclude='.tools/'
@@ -37,6 +39,17 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
+            set +e
             systemctl restart quicktransform
-            sleep 2
+            restart_rc=$?
+            sleep 3
             systemctl is-active quicktransform
+            active_rc=$?
+            echo "restart_rc=${restart_rc} active_rc=${active_rc}"
+            if [ "${restart_rc}" -ne 0 ] || [ "${active_rc}" -ne 0 ]; then
+              echo "=== status ==="
+              systemctl status quicktransform --no-pager -l
+              echo "=== journal ==="
+              journalctl -u quicktransform -n 40 --no-pager
+              exit 1
+            fi
