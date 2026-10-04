@@ -33,23 +33,16 @@ jobs:
           remote_key: ${{ secrets.DEPLOY_KEY }}
 
       - name: Restart service
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          script: |
-            set +e
-            systemctl restart quicktransform
-            restart_rc=$?
-            sleep 3
-            systemctl is-active quicktransform
-            active_rc=$?
-            echo "restart_rc=${restart_rc} active_rc=${active_rc}"
-            if [ "${restart_rc}" -ne 0 ] || [ "${active_rc}" -ne 0 ]; then
-              echo "=== status ==="
-              systemctl status quicktransform --no-pager -l
-              echo "=== journal ==="
-              journalctl -u quicktransform -n 40 --no-pager
-              exit 1
-            fi
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s' "$DEPLOY_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          ssh -i "$HOME/.ssh/deploy_key" \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'systemctl restart quicktransform && sleep 3 && systemctl is-active quicktransform'
