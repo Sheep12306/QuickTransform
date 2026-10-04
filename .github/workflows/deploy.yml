@@ -38,10 +38,14 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          set -euo pipefail
-          eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$DEPLOY_KEY" | ssh-add - >/dev/null 2>&1
+          set +e
+          eval "$(ssh-agent -s)"
+          printf '%s' "$DEPLOY_KEY" | tr -d '\r' | ssh-add -
+          echo "ssh-add rc=$?"
           ssh -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
             'systemctl restart quicktransform && sleep 3 && systemctl is-active quicktransform'
+          rc=$?
+          echo "ssh rc=$rc"
+          exit $rc
