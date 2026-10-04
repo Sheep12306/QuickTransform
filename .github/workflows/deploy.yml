@@ -38,11 +38,10 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          mkdir -p "$HOME/.ssh"
-          printf '%s' "$DEPLOY_KEY" > "$HOME/.ssh/deploy_key"
-          chmod 600 "$HOME/.ssh/deploy_key"
-          ssh -i "$HOME/.ssh/deploy_key" \
-            -o StrictHostKeyChecking=no \
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          printf '%s\n' "$DEPLOY_KEY" | ssh-add - >/dev/null 2>&1
+          ssh -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
             'systemctl restart quicktransform && sleep 3 && systemctl is-active quicktransform'
