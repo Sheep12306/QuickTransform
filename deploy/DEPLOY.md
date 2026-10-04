@@ -123,18 +123,27 @@ server {
 
 ---
 
-## 7. ⚠️ PDF 转图片功能在 Linux 上的限制
+## 7. PDF 转图片功能跨平台说明
 
-目前「PDF → 图片」的实现调用的是 **Windows PowerShell**（`src/w2md/pdf_to_images.ps1`），在 Linux 服务器上会失败。
+「PDF → 图片」现已**跨平台**：
 
-- 其余功能（docx→markdown、excel→csv/json、PDF→Word）均**跨平台**，Linux 上正常。
-- 若服务器上也需要「PDF→图片」，需要把这段改成调用 Linux 的 `pdftoppm`（poppler-utils，上文已安装）。这属于代码改动，可让开发者帮忙加一段 Linux 兼容逻辑。
+- **Windows**：调用内置 PDF 渲染器（`src/w2md/pdf_to_images.ps1`）。
+- **Linux / macOS**：调用 `pdftoppm`（poppler-utils，第 2 节 / `deploy.sh` 已安装）。
+
+若 Linux 上提示缺少 `pdftoppm`，执行：
+
+```bash
+sudo apt-get install -y poppler-utils   # Debian/Ubuntu
+sudo dnf install -y poppler-utils       # CentOS / Alibaba Cloud Linux
+```
 
 ---
 
 ## 8. 更新版本
 
-本地改完代码后，FinalShell 重新拖拽覆盖 `/opt/quicktransform` 里的文件（同样排除 `.tools/` 等），然后：
+**已配置自动部署（GitHub Actions）**：改完代码 `git push` 到 GitHub，会自动同步到服务器并重启服务，无需手动拖文件。一次性配置与使用方法见 [deploy/CICD.md](CICD.md)。
+
+**手动兜底**：本地改完代码后，FinalShell 重新拖拽覆盖 `/opt/quicktransform` 里的文件（同样排除 `.tools/` 等），然后：
 
 ```bash
 sudo systemctl restart quicktransform
