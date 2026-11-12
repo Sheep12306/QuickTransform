@@ -10,11 +10,11 @@ from w2md.config import Config
 from w2md.pipeline import convert
 
 
-EXPECTED_HTML = """# 需求背景
+EXPECTED_HTML = """## 需求背景
 
 本文档描述采购订单需求。
 
-## 采购订单流程
+### 采购订单流程
 
 **加粗**的普通文字。
 
@@ -26,15 +26,15 @@ EXPECTED_HTML = """# 需求背景
 
 ![示例图片](sample_prd.assets/img-001.png)
 
-### 字段说明
+#### 字段说明
 """
 
 
-EXPECTED_DROP = """# 需求背景
+EXPECTED_DROP = """## 需求背景
 
 本文档描述采购订单需求。
 
-## 采购订单流程
+### 采购订单流程
 
 **加粗**的普通文字。
 
@@ -46,7 +46,7 @@ EXPECTED_DROP = """# 需求背景
 
 ![示例图片](sample_prd.assets/img-001.png)
 
-### 字段说明
+#### 字段说明
 """
 
 
@@ -109,8 +109,11 @@ class ConversionTest(unittest.TestCase):
             report, md_path = convert(docx, tmp, config=Config(assets_mode="placeholder"))
             markdown = md_path.read_text(encoding="utf-8")
 
-            self.assertIn("**图片占位 1：示例图片**", markdown)
+            self.assertIn("{{SHOWDOC_IMAGE_000001}}", markdown)
             self.assertNotIn("data:image", markdown)
             self.assertFalse((tmp / "sample_prd.assets").exists())
+            self.assertTrue((tmp / "assets" / "manifest.json").is_file())
+            self.assertTrue((tmp / "assets" / "sample_prd-image-000001.png").is_file())
             self.assertEqual(report.stats["images"], 1)
+            self.assertEqual(report.stats["image_occurrences"], 1)
             self.assertTrue(any(w.kind == "image_placeholder" for w in report.warnings))

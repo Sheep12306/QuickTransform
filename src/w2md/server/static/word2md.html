@@ -52,7 +52,7 @@
         <div class="help-tip" id="asset-help-tip" role="tooltip">
           <span class="help-tip-item"><strong>文件夹</strong>：图片单独保存，Markdown 引用相对路径，源码短、便于编辑。</span>
           <span class="help-tip-item"><strong>内嵌</strong>：图片转成 Base64 直接写进 Markdown，一个文件即可带走，但源码会很长。</span>
-          <span class="help-tip-item"><strong>占位符</strong>：只保留插入位置提示，图片后续手动插入，适合检查正文。</span>
+          <span class="help-tip-item"><strong>占位符</strong>：按正文顺序提取原图到 <code>assets/</code>，Markdown 写入 <code>{{SHOWDOC_IMAGE_000001}}</code> 形式的占位符，并生成 <code>manifest.json</code>（含 SHA-256），便于后续手工替换为 ShowDoc 图片地址。</span>
         </div>
       </div>
     </div>

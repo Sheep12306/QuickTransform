@@ -7,14 +7,21 @@ import uuid
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from ..config import Config
 from ..excel2csv import convert_excel_to_csvs
 from ..excel2json import convert_excel_to_json
+from ..image_extract import extract_images_from_package
+from ..opc.package import OpcPackage
 from ..pdf_to_images import convert_pdf_to_images
 from ..pdf_to_word import convert_pdf_to_word
 from ..pipeline import convert
+from ..placeholder_replace import (
+    analyze_replacement,
+    replace_placeholders,
+    update_manifest,
+)
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -32,6 +39,9 @@ MIME = {
     ".bmp": "image/bmp",
     ".tif": "image/tiff",
     ".tiff": "image/tiff",
+    ".emf": "image/emf",
+    ".wmf": "image/wmf",
+    ".json": "application/json; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
     ".zip": "application/zip",
 }
@@ -63,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         if path.startswith("/api/assets/"):
-            return self._serve_asset(path)
+            return self._serve_asset(path, parsed.query)
         if path.startswith("/api/download/"):
             return self._serve_download(path)
         if path.startswith("/api/pdf2image/files/"):
@@ -88,24 +98,37 @@ class Handler(BaseHTTPRequestHandler):
         ext = target.suffix.lower()
         return self._send_bytes(target.read_bytes(), MIME.get(ext, "application/octet-stream"))
 
-    def _serve_asset(self, path):
+    def _serve_asset(self, path, query=""):
         parts = path[len("/api/assets/"):].split("/", 1)
         if len(parts) != 2:
             return self._send_json({"error": "bad asset path"}, 400)
         token, name = parts
+        name = unquote(name)
         job = _JOBS.get(token)
         if not job:
             return self._send_json({"error": "not found"}, 404)
-        asset_path = job["assets_dir"] / name
+        base_dir = Path(job["assets_dir"]).resolve()
+        asset_path = (base_dir / name).resolve()
+        if asset_path != base_dir and base_dir not in asset_path.parents:
+            return self._send_json({"error": "not found"}, 404)
         if not asset_path.is_file():
             return self._send_json({"error": "not found"}, 404)
         ext = asset_path.suffix.lower()
-        return self._send_bytes(asset_path.read_bytes(), MIME.get(ext, "application/octet-stream"))
+        headers = {}
+        if parse_qs(query).get("download"):
+            headers["Content-Disposition"] = "attachment; filename*=UTF-8''{0}".format(
+                quote(asset_path.name)
+            )
+        return self._send_bytes(
+            asset_path.read_bytes(),
+            MIME.get(ext, "application/octet-stream"),
+            extra_headers=headers,
+        )
 
     def _serve_download(self, path):
         token = path[len("/api/download/"):].strip("/")
         job = _JOBS.get(token)
-        if not job:
+        if not job or not job.get("md_path"):
             return self._send_json({"error": "not found"}, 404)
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -267,6 +290,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._convert_excel_to_csvs(parsed)
         if parsed.path == "/api/excel2json/convert":
             return self._convert_excel_to_json(parsed)
+        if parsed.path == "/api/word2image/extract":
+            return self._extract_word_images(parsed)
+        if parsed.path == "/api/word2image/zip":
+            return self._zip_word_images()
+        if parsed.path == "/api/placeholder-replace/analyze":
+            return self._analyze_placeholder_replace()
+        if parsed.path == "/api/placeholder-replace/generate":
+            return self._generate_placeholder_replace()
         if parsed.path != "/api/convert":
             return self._send_json({"error": "not found"}, 404)
 
@@ -305,18 +336,45 @@ class Handler(BaseHTTPRequestHandler):
             report.source = filename
             markdown = md_path.read_text(encoding="utf-8")
 
-            assets_dir = out_dir / (stem + ".assets")
-            images = []
-            if assets_dir.is_dir():
-                for asset in sorted(assets_dir.iterdir()):
-                    if asset.is_file():
-                        images.append(
-                            {
-                                "path": stem + ".assets/" + asset.name,
-                                "url": "/api/assets/{0}/{1}".format(token, asset.name),
-                                "size": asset.stat().st_size,
-                            }
-                        )
+            manifest = None
+            manifest_url = None
+            if assets == "placeholder":
+                assets_dir = out_dir / "assets"
+                manifest_path = assets_dir / "manifest.json"
+                if manifest_path.is_file():
+                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    manifest_url = "/api/assets/{0}/manifest.json".format(token)
+                images = []
+                for entry in (manifest or {}).get("images", []):
+                    local_path = entry.get("local_path")
+                    if not local_path:
+                        continue
+                    file_name = Path(local_path).name
+                    file_path = assets_dir / file_name
+                    if not file_path.is_file():
+                        continue
+                    images.append(
+                        {
+                            "path": local_path,
+                            "url": "/api/assets/{0}/{1}".format(token, file_name),
+                            "size": file_path.stat().st_size,
+                            "placeholder": entry.get("placeholder"),
+                            "alt": entry.get("alt_text"),
+                        }
+                    )
+            else:
+                assets_dir = out_dir / (stem + ".assets")
+                images = []
+                if assets_dir.is_dir():
+                    for asset in sorted(assets_dir.iterdir()):
+                        if asset.is_file():
+                            images.append(
+                                {
+                                    "path": stem + ".assets/" + asset.name,
+                                    "url": "/api/assets/{0}/{1}".format(token, asset.name),
+                                    "size": asset.stat().st_size,
+                                }
+                            )
             _JOBS[token] = {"md_path": md_path, "assets_dir": assets_dir, "stem": stem}
 
             return self._send_json(
@@ -325,7 +383,11 @@ class Handler(BaseHTTPRequestHandler):
                     "markdown": markdown,
                     "report": report.to_dict(),
                     "images": images,
-                    "download_url": "/api/download/{0}".format(token) if images else None,
+                    "manifest": manifest,
+                    "manifest_url": manifest_url,
+                    "download_url": "/api/download/{0}".format(token)
+                    if images or manifest
+                    else None,
                 }
             )
         except Exception as exc:
@@ -333,6 +395,184 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             if tmp_path is not None:
                 tmp_path.unlink(missing_ok=True)
+
+    def _read_json_body(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0:
+            return {}
+        raw = self.rfile.read(length)
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return None
+
+    def _analyze_placeholder_replace(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return self._send_json({"error": "请求格式错误"}, 400)
+        analysis = analyze_replacement(
+            payload.get("markdown") or "",
+            payload.get("showdoc_markdown") or "",
+            manifest=payload.get("manifest"),
+            mapping=payload.get("mapping"),
+        )
+        return self._send_json(analysis.to_dict())
+
+    def _generate_placeholder_replace(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return self._send_json({"error": "请求格式错误"}, 400)
+
+        markdown = payload.get("markdown") or ""
+        showdoc = payload.get("showdoc_markdown") or ""
+        manifest = payload.get("manifest")
+        analysis = analyze_replacement(
+            markdown,
+            showdoc,
+            manifest=manifest,
+            mapping=payload.get("mapping"),
+        )
+        if not analysis.can_generate:
+            data = analysis.to_dict()
+            data["error"] = "校验未通过，未生成最终 Markdown"
+            return self._send_json(data, 422)
+
+        mapping = {
+            item.placeholder: item.url for item in analysis.mapping if item.url
+        }
+        alt = {item.placeholder: item.alt_text for item in analysis.mapping}
+        result = replace_placeholders(markdown, mapping, alt, analysis)
+        if result.errors:
+            data = analysis.to_dict()
+            data.update(result.to_dict())
+            data["error"] = "替换失败，未生成最终 Markdown"
+            return self._send_json(data, 422)
+
+        return self._send_json(
+            {
+                "analysis": analysis.to_dict(),
+                "markdown": result.markdown,
+                "replaced_count": result.replaced_count,
+                "skipped_code_count": result.skipped_code_count,
+                "warnings": result.warnings,
+                "updated_manifest": update_manifest(manifest, mapping),
+            }
+        )
+
+    def _extract_word_images(self, parsed):
+        query = parse_qs(parsed.query)
+        filename = (query.get("filename") or ["upload.docx"])[0]
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length)
+        if not body:
+            return self._send_json({"error": "请求体为空"}, 400)
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+                tmp.write(body)
+                tmp_path = Path(tmp.name)
+
+            stem = _safe_stem(Path(filename).stem)
+            token = uuid.uuid4().hex
+            out_dir = Path(tempfile.gettempdir()) / "quicktranser_word_images" / token
+
+            with OpcPackage(tmp_path) as package:
+                result = extract_images_from_package(package, out_dir, stem=stem)
+
+            images = []
+            for occurrence in result.occurrences:
+                image = {
+                    "placeholder": occurrence.placeholder,
+                    "order": occurrence.order,
+                    "relationship_id": occurrence.relationship_id,
+                    "source_part": occurrence.source_part,
+                    "filename": Path(occurrence.local_path).name if occurrence.local_path else None,
+                    "url": None,
+                    "size": occurrence.size,
+                    "mime_type": occurrence.mime_type,
+                    "extension": occurrence.extension,
+                    "sha256": occurrence.sha256,
+                    "sha256_verified": occurrence.sha256_verified,
+                    "alt_text": occurrence.alt_text,
+                    "alt_source": occurrence.alt_source,
+                    "is_duplicate": occurrence.is_duplicate,
+                    "duplicate_of": occurrence.duplicate_of,
+                    "is_compatibility_format": occurrence.is_compatibility_format,
+                    "preview_url": None,
+                    "preview_status": occurrence.preview_status,
+                    "status": occurrence.status,
+                    "error": occurrence.error,
+                }
+                if occurrence.local_path:
+                    image["url"] = "/api/assets/{0}/{1}".format(
+                        token, Path(occurrence.local_path).name
+                    )
+                if occurrence.preview_path:
+                    image["preview_url"] = "/api/assets/{0}/{1}".format(
+                        token, Path(occurrence.preview_path).name
+                    )
+                images.append(image)
+
+            _JOBS[token] = {"assets_dir": result.assets_dir, "stem": stem, "md_path": None}
+            return self._send_json(
+                {
+                    "filename": filename,
+                    "token": token,
+                    "images": images,
+                    "summary": result.summary,
+                    "manifest_url": "/api/assets/{0}/manifest.json".format(token),
+                    "notes": result.notes,
+                    "errors": result.errors,
+                }
+            )
+        except Exception as exc:
+            return self._send_json({"error": str(exc)}, 500)
+        finally:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
+
+    def _zip_word_images(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(length)
+        try:
+            payload = json.loads(raw.decode("utf-8") or "{}")
+        except (ValueError, UnicodeDecodeError):
+            return self._send_json({"error": "请求格式错误"}, 400)
+
+        token = payload.get("token")
+        names = payload.get("files") or []
+        job = _JOBS.get(token)
+        if not job or not job.get("assets_dir"):
+            return self._send_json({"error": "任务已过期，请重新提取"}, 404)
+
+        base_dir = Path(job["assets_dir"]).resolve()
+        buffer = io.BytesIO()
+        added = 0
+        seen = set()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for raw_name in names:
+                name = Path(str(raw_name)).name
+                if not name or name in seen:
+                    continue
+                asset_path = (base_dir / name).resolve()
+                if base_dir not in asset_path.parents or not asset_path.is_file():
+                    continue
+                archive.write(asset_path, arcname=name)
+                seen.add(name)
+                added += 1
+
+        if not added:
+            return self._send_json({"error": "没有可打包的图片"}, 400)
+
+        zip_name = Path(str(payload.get("zip_name") or "word-images.zip")).name
+        return self._send_bytes(
+            buffer.getvalue(),
+            "application/zip",
+            extra_headers={
+                "Content-Disposition": "attachment; filename*=UTF-8''{0}".format(quote(zip_name))
+            },
+        )
 
     def _convert_pdf_to_images(self, parsed):
         query = parse_qs(parsed.query)

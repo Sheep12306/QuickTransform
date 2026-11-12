@@ -6,6 +6,7 @@ import mimetypes
 from pathlib import Path
 
 from .config import Config
+from .image_extract import extract_images_from_package, unmatched_placeholder
 from .ir.nodes import (
     Bold,
     Color,
@@ -18,8 +19,15 @@ from .ir.nodes import (
     Text,
     Underline,
 )
-from .opc.package import DOCUMENT_PART, DOCUMENT_RELS_PART, STYLES_PART, OpcPackage
+from .opc.package import (
+    DOCUMENT_PART,
+    DOCUMENT_RELS_PART,
+    NUMBERING_PART,
+    STYLES_PART,
+    OpcPackage,
+)
 from .parse.document import parse_document
+from .parse.numbering import NumberingTable
 from .parse.styles import StyleTable
 from .render.markdown import render
 from .report import Report
@@ -50,13 +58,55 @@ def convert(source, output_dir, config=None, basename=None):
 
         rels = package.read_document_relationships() if package.has_part(DOCUMENT_RELS_PART) else {}
         doc_root = package.read_xml(DOCUMENT_PART)
-        document = parse_document(doc_root, styles, report, rels=rels)
+        numbering = None
+        if package.has_part(NUMBERING_PART):
+            numbering = NumberingTable.from_xml(package.read_xml(NUMBERING_PART))
+
+        extraction = None
+        if config.assets_mode == "placeholder":
+            try:
+                extraction = extract_images_from_package(
+                    package,
+                    output_dir,
+                    doc_root=doc_root,
+                    stem=stem,
+                    report=report,
+                    generate_previews=config.image_previews,
+                )
+            except Exception as exc:
+                report.add(
+                    "image_extract_failed",
+                    "图片",
+                    "图片提取失败，Markdown 将写入 UNMATCHED 占位符：{0}".format(exc),
+                    level="error",
+                )
+
+        document = parse_document(doc_root, styles, report, rels=rels, numbering=numbering)
 
         if config.assets_mode == "placeholder":
-            image_count = _replace_images_with_placeholders(document)
+            replaced_count = _replace_images_with_placeholders(document, extraction, report)
+            image_count = len(extraction.occurrences) if extraction is not None else replaced_count
             image_bytes = 0
+            if extraction is not None:
+                report.stats.update(
+                    {
+                        "image_occurrences": extraction.summary.get("occurrences", image_count),
+                        "image_unique_media": extraction.summary.get("unique_media", 0),
+                        "image_duplicates": extraction.summary.get("duplicates", 0),
+                        "image_failed": extraction.summary.get("failed", 0),
+                        "image_compatibility": extraction.summary.get("compatibility", 0),
+                        "image_placeholders": replaced_count,
+                        "image_manifest": "assets/manifest.json",
+                    }
+                )
             if image_count:
-                report.add("image_placeholder", "图片", "已用占位符替换 {0} 张图片，请按位置手动插入".format(image_count))
+                report.add(
+                    "image_placeholder",
+                    "图片",
+                    "已按正文顺序生成 {0} 个 ShowDoc 图片占位符：{1}".format(
+                        image_count, _example_placeholders(extraction)
+                    ),
+                )
         else:
             image_count, image_bytes = _extract_images(document, package, stem, output_dir, report, config.assets_mode)
         markdown = render(
@@ -64,6 +114,27 @@ def convert(source, output_dir, config=None, basename=None):
             heading_offset=config.heading_offset,
             inline_style=config.inline_style,
         )
+
+        if config.heading_offset:
+            shifted = [
+                block
+                for block in document.blocks
+                if isinstance(block, Heading)
+                and block.level <= 6
+                and block.level + config.heading_offset > 6
+            ]
+            if shifted:
+                report.add(
+                    "heading_downgraded",
+                    "标题",
+                    "heading-offset 使 {0} 个标题超过 Markdown 六级，已降级为 H6".format(
+                        len(shifted)
+                    ),
+                )
+            for heading in report.headings:
+                heading["level"] = max(
+                    1, min(6, heading["original_level"] + config.heading_offset)
+                )
 
         if config.inline_style == "drop":
             dropped = _count_dropped_styles(document)
@@ -156,19 +227,42 @@ def _iter_images_in(nodes):
             yield from _iter_images_in(node.children)
 
 
-def _replace_images_with_placeholders(document):
-    counter = [0]
+def _replace_images_with_placeholders(document, extraction, report):
+    placeholders = extraction.placeholders if extraction is not None else []
+    used = set()
+    next_unused = [0]
+    unmatched = [0]
+
+    def take_placeholder(image):
+        candidate = getattr(image, "placeholder", "") or ""
+        if candidate and candidate not in used:
+            used.add(candidate)
+            return candidate
+
+        while next_unused[0] < len(placeholders):
+            candidate = placeholders[next_unused[0]]
+            next_unused[0] += 1
+            if candidate not in used:
+                used.add(candidate)
+                return candidate
+
+        unmatched[0] += 1
+        return unmatched_placeholder(unmatched[0])
+
+    def is_placeholder(node):
+        return isinstance(node, Text) and node.text.startswith("{{SHOWDOC_IMAGE_")
 
     def transform(nodes):
         result = []
         for node in nodes:
             if isinstance(node, Image):
-                counter[0] += 1
-                label = node.alt or "图片"
-                result.append(Bold([Text("图片占位 {0}：{1}".format(counter[0], label))]))
+                result.append(Text(take_placeholder(node)))
             elif isinstance(node, (Bold, Italic, Color, Highlight, Underline)):
                 node.children = transform(node.children)
-                result.append(node)
+                if node.children and all(is_placeholder(child) for child in node.children):
+                    result.extend(node.children)
+                else:
+                    result.append(node)
             else:
                 result.append(node)
         return result
@@ -179,7 +273,36 @@ def _replace_images_with_placeholders(document):
         elif isinstance(block, Table):
             for index, row in enumerate(block.rows):
                 block.rows[index] = [transform(cell) for cell in row]
-    return counter[0]
+
+    unplaced = [placeholder for placeholder in placeholders if placeholder not in used]
+    if unmatched[0]:
+        report.add(
+            "image_placeholder_missing",
+            "图片",
+            "{0} 张图片没有对应的占位符，已写入 UNMATCHED 占位符".format(unmatched[0]),
+            level="error",
+        )
+    if unplaced:
+        preview = "、".join(unplaced[:10])
+        more = " 等 {0} 个".format(len(unplaced)) if len(unplaced) > 10 else ""
+        report.add(
+            "image_placeholder_unplaced",
+            "图片",
+            "以下已提取图片的占位符未出现在 Markdown 中（可能位于文本框等未解析结构）：{0}{1}".format(
+                preview, more
+            ),
+        )
+
+    return len(used)
+
+
+def _example_placeholders(extraction):
+    if extraction is None or not extraction.occurrences:
+        return ""
+    examples = extraction.placeholders[:3]
+    if len(extraction.occurrences) > len(examples):
+        examples.append("…")
+    return "、".join(examples)
 
 
 def _media_part(target):

@@ -329,7 +329,9 @@
     var stats = report.stats || {};
     statLines.innerHTML = "行数 <b>" + (stats.lines || 0) + "</b>";
     statChars.innerHTML = "字数 <b>" + (stats.chars || 0) + "</b>";
-    statImages.innerHTML = "图片 <b>" + (stats.images || 0) + "</b>";
+    var imageTotal = stats.image_occurrences || stats.images || 0;
+    var imageFailed = stats.image_failed || 0;
+    statImages.innerHTML = "图片 <b>" + imageTotal + "</b>" + (imageFailed ? " / 异常 <b>" + imageFailed + "</b>" : "");
     var warnings = report.warnings || [];
     statWarnings.innerHTML = "警告 <b>" + warnings.length + "</b>";
     warningsList.innerHTML = "";
@@ -481,6 +483,14 @@
     URL.revokeObjectURL(url);
   });
 
+  function setAssetMode(value) {
+    assetValue = value;
+    var buttons = assetMode.querySelectorAll("button");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].classList.toggle("active", buttons[i].getAttribute("data-value") === value);
+    }
+  }
+
   resetBtn.addEventListener("click", reset);
   styleToggle.addEventListener("change", function () {
     if (currentFile) { convertFile(currentFile); }
@@ -488,11 +498,7 @@
   assetMode.addEventListener("click", function (event) {
     var button = event.target.closest("button");
     if (!button) { return; }
-    assetValue = button.getAttribute("data-value");
-    var buttons = assetMode.querySelectorAll("button");
-    for (var i = 0; i < buttons.length; i++) {
-      buttons[i].classList.toggle("active", buttons[i] === button);
-    }
+    setAssetMode(button.getAttribute("data-value"));
     if (currentFile) { convertFile(currentFile); }
   });
   preview.addEventListener("dblclick", function (event) {

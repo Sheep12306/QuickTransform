@@ -70,8 +70,12 @@ def _style_key(node):
 
 def _render_block(block, heading_offset, inline_style):
     if isinstance(block, Heading):
-        level = max(1, min(6, block.level + heading_offset))
-        return "#" * level + " " + _render_inlines(block.children, inline_style)
+        raw_level = block.level + heading_offset
+        level = max(1, min(6, raw_level))
+        text = _render_inlines(block.children, inline_style)
+        if block.level > 6:
+            text = "〔H{0}〕 ".format(block.level) + text
+        return "#" * level + " " + text
     if isinstance(block, Paragraph):
         return _render_inlines(block.children, inline_style)
     if isinstance(block, Table):

@@ -8,7 +8,7 @@ from . import inline
 W = "{%s}" % W_NS
 
 
-def parse_table(tbl_el):
+def parse_table(tbl_el, rels=None):
     column_count = _column_count(tbl_el)
     rows = []
     merge_bank = {}
@@ -24,7 +24,7 @@ def parse_table(tbl_el):
             if vmerge == "continue":
                 content = merge_bank.get(col, [])
             else:
-                content = _parse_cell(tc)
+                content = _parse_cell(tc, rels)
                 if vmerge == "restart":
                     for offset in range(span):
                         merge_bank[col + offset] = content
@@ -75,11 +75,11 @@ def _v_merge(tcpr):
     return "restart"
 
 
-def _parse_cell(tc):
+def _parse_cell(tc, rels=None):
     children = []
     paragraphs = tc.findall(W + "p")
     for index, p_el in enumerate(paragraphs):
         if index:
             children.append(LineBreak())
-        children.extend(inline.parse_paragraph_runs(p_el))
+        children.extend(inline.parse_paragraph_runs(p_el, rels))
     return children

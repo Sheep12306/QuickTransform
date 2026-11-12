@@ -1,15 +1,13 @@
 """Inline (run-level) content parsing."""
 
 from ..ir.nodes import Bold, Color, Highlight, Image, Italic, Text, Underline
-from ..opc.ns import A_NS, PIC_NS, R_NS, V_NS, W_NS, WP_NS
+from ..opc.image_refs import iter_image_references
+from ..opc.ns import IMAGE_PLACEHOLDER_ATTR, PIC_NS, W_NS, WP_NS
 
 
 W = "{%s}" % W_NS
-A = "{%s}" % A_NS
 PIC = "{%s}" % PIC_NS
-V = "{%s}" % V_NS
 WP = "{%s}" % WP_NS
-R = "{%s}" % R_NS
 
 
 HIGHLIGHT_COLORS = {
@@ -106,14 +104,11 @@ def _parse_run(r_el, rels):
 def _run_images(r_el, rels):
     images = []
     alt = _image_alt(r_el)
-    for blip in r_el.iter(A + "blip"):
-        rid = blip.get(R + "embed")
-        if rid and rels and rid in rels:
-            images.append(Image(source=rels[rid], alt=alt))
-    for imagedata in r_el.iter(V + "imagedata"):
-        rid = imagedata.get(R + "id")
-        if rid and rels and rid in rels:
-            images.append(Image(source=rels[rid], alt=alt))
+    for element, rid, _kind in iter_image_references(r_el):
+        placeholder = element.get(IMAGE_PLACEHOLDER_ATTR) or ""
+        source = rels.get(rid) if (rid and rels) else None
+        if source or placeholder:
+            images.append(Image(source=source or "", alt=alt, placeholder=placeholder))
     return images
 
 

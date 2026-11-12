@@ -120,6 +120,22 @@ body {
 .segmented .seg.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .segmented .seg + .seg { border-left: 1px solid var(--border); }
 
+.quick-btn {
+  margin-left: auto;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background .15s ease, transform .15s ease;
+}
+.quick-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.quick-btn:active { background: var(--accent-active); transform: none; }
+
 .help-wrap { position: relative; display: inline-flex; }
 .help-btn {
   width: 24px;
@@ -407,6 +423,7 @@ body.lightbox-open { overflow: hidden; }
   .panes { grid-template-columns: 1fr; }
   .layout { margin: 20px auto; }
   .dropzone { padding: 56px 16px; }
+  .quick-btn { margin-left: 0; width: 100%; }
   .help-tip { left: auto; right: 0; width: min(320px, calc(100vw - 48px)); transform: translateY(4px); }
   .help-wrap:hover .help-tip, .help-wrap:focus-within .help-tip { transform: translateY(0); }
 }

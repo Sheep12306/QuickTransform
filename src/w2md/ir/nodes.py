@@ -45,6 +45,7 @@ class Image:
     source: str
     alt: str = ""
     src: str = ""
+    placeholder: str = ""
 
 
 @dataclass

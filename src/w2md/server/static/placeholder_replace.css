@@ -1,0 +1,207 @@
+.replace-layout { max-width: 1320px; }
+
+.replace-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.input-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.input-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+.input-head h3 { margin: 0; font-size: 13px; font-weight: 650; }
+.input-card textarea {
+  min-height: 240px;
+  border: 0;
+  padding: 12px;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+}
+.input-card textarea:focus { box-shadow: inset 0 0 0 2px var(--accent-soft); }
+.input-name { margin: 0; padding: 6px 12px 8px; font-size: 11px; color: var(--muted); min-height: 22px; }
+
+.file-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.file-pick:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+.replace-optional {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--muted);
+}
+.optional-name { color: var(--muted); }
+
+.replace-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+.replace-actions .quick-btn { margin-left: 0; }
+
+.analysis-panel {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 14px;
+}
+.count-grid { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.count-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  color: var(--muted);
+}
+.count-item b { color: var(--text); font-size: 13px; }
+
+.message-list { margin: 10px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.error-list { color: var(--error); }
+.warning-list { color: var(--warn); }
+
+.mapping-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+.panel-head h3 { margin: 0; font-size: 13px; font-weight: 650; }
+.panel-head span { color: var(--muted); font-size: 12px; }
+.mapping-scroll { overflow-x: auto; }
+.mapping-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mapping-table th, .mapping-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.mapping-table th { color: var(--muted); font-weight: 600; white-space: nowrap; background: #fbfdfc; }
+.mapping-table tr:last-child td { border-bottom: 0; }
+.placeholder-code { font-family: var(--mono); font-size: 11px; color: var(--accent); white-space: nowrap; }
+.mapping-thumb {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  object-fit: contain;
+  background: #fbfdfc;
+  display: block;
+}
+.mapping-thumb-empty {
+  width: 48px;
+  height: 48px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+.mapping-alt { max-width: 220px; }
+.mapping-alt strong { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-alt span { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.url-select {
+  width: 100%;
+  min-width: 260px;
+  max-width: 520px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.url-select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.status-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+.status-badge.matched { background: var(--accent-soft); border-color: #bfe8d6; color: var(--accent); }
+.status-badge.missing { background: var(--error-soft); border-color: #f1c0bd; color: var(--error); }
+.status-badge.invalid { background: var(--warn-soft); border-color: #f5d6b4; color: var(--warn); }
+
+.result-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.result-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.result-actions .ghost-btn { padding: 5px 9px; font-size: 12px; }
+.result-panel textarea {
+  width: 100%;
+  min-height: 300px;
+  border: 0;
+  padding: 12px;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+}
+.result-note { margin: 0; padding: 8px 12px 10px; font-size: 12px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .replace-inputs { grid-template-columns: 1fr; }
+  .input-card textarea { min-height: 180px; }
+  .url-select { min-width: 180px; }
+}
