@@ -3,6 +3,7 @@
 import io
 import json
 import tempfile
+import time
 import uuid
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -57,10 +58,16 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "QuickTransform/0.1"
 
     def _send_bytes(self, data, ctype, status=200, extra_headers=None):
+        headers = dict(extra_headers or {})
+        start = getattr(self, "_request_start", None)
+        if start is not None:
+            headers.setdefault(
+                "X-Process-Time", "{0:.3f}s".format(time.perf_counter() - start)
+            )
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
-        for key, value in (extra_headers or {}).items():
+        for key, value in headers.items():
             self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)
@@ -281,6 +288,7 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
+        self._request_start = time.perf_counter()
         parsed = urlparse(self.path)
         if parsed.path == "/api/pdf2image/convert":
             return self._convert_pdf_to_images(parsed)
