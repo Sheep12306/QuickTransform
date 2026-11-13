@@ -92,7 +92,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     }).then(function (response) {
-      return response.json().then(function (body) {
+      return window.qtParseApiResponse(response).then(function (body) {
         return { ok: response.ok, data: body };
       });
     });

@@ -359,7 +359,7 @@
       body: JSON.stringify({ token: state.token, files: files, zip_name: zipName })
     }).then(function (response) {
       if (response.ok) { return response.blob(); }
-      return response.json().catch(function () { return {}; }).then(function (data) {
+      return window.qtParseApiResponse(response).then(function (data) {
         throw new Error(data.error || "打包失败");
       });
     }).then(function (blob) {
@@ -552,7 +552,7 @@
       method: "POST",
       body: file
     }).then(function (response) {
-      return response.json().then(function (data) {
+      return window.qtParseApiResponse(response).then(function (data) {
         return { ok: response.ok, data: data };
       });
     }).then(function (res) {

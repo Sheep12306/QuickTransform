@@ -52,3 +52,19 @@ jobs:
           rc=$?
           echo "ssh rc=$rc"
           exit $rc
+
+      - name: Tune nginx upload limits
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -e
+          eval "$(ssh-agent -s)"
+          printf '%s' "$DEPLOY_KEY" | tr -d '\r' | ssh-add -
+          DEPLOY_USER="$(printf '%s' "$DEPLOY_USER" | tr -d '[:space:]')"
+          DEPLOY_HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')"
+          ssh -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'python3 /opt/quicktransform/deploy/tune_nginx.py'

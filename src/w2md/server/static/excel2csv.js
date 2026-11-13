@@ -106,7 +106,7 @@
       method: "POST",
       body: file
     }).then(function (resp) {
-      return resp.json().then(function (data) {
+      return window.qtParseApiResponse(resp).then(function (data) {
         return { ok: resp.ok, data: data };
       });
     }).then(function (res) {
