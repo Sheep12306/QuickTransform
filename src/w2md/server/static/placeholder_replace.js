@@ -12,6 +12,7 @@
   var analyzeBtn = document.getElementById("analyze-btn");
   var clearBtn = document.getElementById("clear-btn");
   var generateBtn = document.getElementById("generate-btn");
+  var copyOneClick = document.getElementById("copy-one-click");
   var analysisPanel = document.getElementById("analysis-panel");
   var mappingPanel = document.getElementById("mapping-panel");
   var mappingBody = document.getElementById("mapping-body");
@@ -61,6 +62,7 @@
     state.mappingDirty = false;
     state.generateResult = null;
     generateBtn.disabled = true;
+    copyOneClick.disabled = true;
     hide(analysisPanel);
     hide(mappingPanel);
     hide(resultPanel);
@@ -165,6 +167,7 @@
     show(analysisPanel);
     show(mappingPanel);
     generateBtn.disabled = !analysis.can_generate;
+    copyOneClick.disabled = !analysis.can_generate;
   }
 
   function renderMessages(id, messages) {
@@ -302,7 +305,7 @@
     return status || "未知";
   }
 
-  function generate() {
+  function generate(copyAfter) {
     if (!state.analysis || !state.analysis.can_generate) {
       toast("请先通过校验", true);
       return;
@@ -326,6 +329,7 @@
         state.mappingDirty = true;
         renderAnalysis();
         showResult(result.data);
+        if (copyAfter) { copyResultText(); }
       })
       .catch(function (error) {
         toast("生成失败：" + (error.message || error), true);
@@ -348,8 +352,21 @@
     }
     resultNote.textContent = notes.join("；");
     downloadManifest.disabled = !data.updated_manifest;
+    copyOneClick.disabled = false;
     show(resultPanel);
     resultPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function copyResultText() {
+    if (!resultText.value) {
+      toast("没有可复制的 Markdown", true);
+      return;
+    }
+    navigator.clipboard.writeText(resultText.value).then(function () {
+      toast("已复制最终 Markdown");
+    }).catch(function (error) {
+      toast("复制失败：" + (error.message || error), true);
+    });
   }
 
   function baseName() {
@@ -451,17 +468,21 @@
   showdocText.addEventListener("input", resetAnalysis);
 
   analyzeBtn.addEventListener("click", analyze);
-  generateBtn.addEventListener("click", generate);
+  generateBtn.addEventListener("click", function () { generate(false); });
+  copyOneClick.addEventListener("click", function () {
+    if (state.generateResult && resultText.value) {
+      copyResultText();
+      return;
+    }
+    if (state.analysis && state.analysis.can_generate) {
+      generate(true);
+      return;
+    }
+    toast("请先通过校验", true);
+  });
   clearBtn.addEventListener("click", clearAll);
 
-  copyResult.addEventListener("click", function () {
-    if (!resultText.value) { return; }
-    navigator.clipboard.writeText(resultText.value).then(function () {
-      toast("已复制最终 Markdown");
-    }).catch(function (error) {
-      toast("复制失败：" + (error.message || error), true);
-    });
-  });
+  copyResult.addEventListener("click", copyResultText);
 
   downloadMd.addEventListener("click", function () {
     if (!resultText.value) { return; }
