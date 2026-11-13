@@ -23,6 +23,7 @@ import json
 import mimetypes
 import posixpath
 import re
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,6 +60,12 @@ MIME_OVERRIDES = {
     ".tif": "image/tiff",
     ".tiff": "image/tiff",
     ".svg": "image/svg+xml",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".jpe": "image/jpeg",
+    ".jfif": "image/jpeg",
+    ".avif": "image/avif",
+    ".ico": "image/x-icon",
 }
 
 VML_SHAPE_TAGS = {
@@ -622,26 +629,69 @@ def _mime_type(extension):
 def _make_preview(data, assets_dir, base_name):
     """Best-effort PNG preview for formats ShowDoc may not display.
 
-    Pillow is optional.  The original media bytes are never modified.
+    Pillow is optional; PyMuPDF is already a project dependency and can render
+    some EMF/TIFF variants.  The original media bytes are never modified.
     """
+
+    preview_name = base_name.rsplit(".", 1)[0] + "-preview.png"
+    preview_path = assets_dir / preview_name
+    errors = []
+    unavailable = []
 
     try:
         from PIL import Image as PILImage
     except Exception:
-        return None, "Pillow 未安装，未生成 PNG 预览", "unavailable"
+        PILImage = None
+        unavailable.append("Pillow")
 
-    preview_name = base_name.rsplit(".", 1)[0] + "-preview.png"
-    preview_path = assets_dir / preview_name
+    if PILImage is not None:
+        try:
+            with PILImage.open(io.BytesIO(data)) as image:
+                if getattr(image, "n_frames", 1) > 1:
+                    image.seek(0)
+                if image.mode not in ("RGB", "RGBA"):
+                    image = image.convert("RGBA")
+                image.save(preview_path, "PNG")
+            return preview_path, None, "generated"
+        except Exception as exc:
+            preview_path.unlink(missing_ok=True)
+            errors.append("Pillow: {0}".format(exc))
+
     try:
-        with PILImage.open(io.BytesIO(data)) as image:
-            if getattr(image, "n_frames", 1) > 1:
-                image.seek(0)
-            if image.mode not in ("RGB", "RGBA"):
-                image = image.convert("RGBA")
-            image.save(preview_path, "PNG")
-        return preview_path, None, "generated"
-    except Exception as exc:
-        return None, str(exc), "failed"
+        import fitz
+    except Exception:
+        fitz = None
+        unavailable.append("PyMuPDF")
+
+    if fitz is not None:
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                suffix=Path(base_name).suffix,
+                dir=str(assets_dir),
+                delete=False,
+            ) as temp:
+                temp.write(data)
+                temp_path = Path(temp.name)
+            document = fitz.open(str(temp_path))
+            try:
+                if document.page_count <= 0:
+                    raise ValueError("没有可渲染页面")
+                pixmap = document[0].get_pixmap()
+                pixmap.save(str(preview_path))
+            finally:
+                document.close()
+            return preview_path, None, "generated"
+        except Exception as exc:
+            preview_path.unlink(missing_ok=True)
+            errors.append("PyMuPDF: {0}".format(exc))
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
+
+    if errors:
+        return None, "；".join(errors), "failed"
+    return None, "{0} 未安装，未生成 PNG 预览".format("/".join(unavailable)), "unavailable"
 
 
 def _relative_path(output_dir, path):

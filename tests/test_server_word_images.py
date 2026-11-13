@@ -2,10 +2,12 @@
 
 import io
 import json
+import shutil
 import tempfile
 import threading
 import unittest
 import urllib.request
+import uuid
 import zipfile
 from pathlib import Path
 
@@ -14,6 +16,20 @@ from w2md.server.app import Handler, ThreadingHTTPServer
 
 
 class WordImageEndpointTest(unittest.TestCase):
+    def test_asset_job_can_be_recovered_after_restart(self):
+        token = uuid.uuid4().hex
+        assets = Path(tempfile.gettempdir()) / "quicktranser_word_images" / token / "assets"
+        assets.mkdir(parents=True)
+        (assets / "sample.png").write_bytes(b"png")
+        try:
+            handler = object.__new__(Handler)
+            job = Handler._recover_asset_job(handler, token)
+            self.assertIsNotNone(job)
+            self.assertEqual(Path(job["assets_dir"]), assets)
+            self.assertIsNone(Handler._recover_asset_job(handler, "not-a-token"))
+        finally:
+            shutil.rmtree(assets.parent, ignore_errors=True)
+
     def test_endpoint_returns_ordered_original_images(self):
         with tempfile.TemporaryDirectory() as tmp:
             docx = Path(tmp) / "order.docx"

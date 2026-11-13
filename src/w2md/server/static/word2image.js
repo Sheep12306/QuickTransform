@@ -30,7 +30,15 @@
     toastTimer: null
   };
 
-  var DISPLAYABLE = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"];
+  var DISPLAYABLE = [
+    ".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".gif",
+    ".webp", ".avif", ".ico", ".bmp", ".svg"
+  ];
+  var DISPLAYABLE_TYPES = [
+    "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp",
+    "image/avif", "image/x-icon", "image/vnd.microsoft.icon",
+    "image/bmp", "image/svg+xml"
+  ];
 
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
@@ -60,7 +68,10 @@
 
   function canDisplay(image) {
     if (image.preview_url) { return true; }
-    return DISPLAYABLE.indexOf((image.extension || "").toLowerCase()) >= 0;
+    if (DISPLAYABLE.indexOf((image.extension || "").toLowerCase()) >= 0) {
+      return true;
+    }
+    return DISPLAYABLE_TYPES.indexOf((image.mime_type || "").toLowerCase()) >= 0;
   }
 
   function formatKey(image) {
@@ -177,7 +188,8 @@
       card.setAttribute("data-index", String(index));
       if (image.status === "failed") { card.classList.add("failed"); }
 
-      var canCopy = !!image.url && image.status !== "failed";
+      var canDownload = !!image.url && image.status !== "failed";
+      var canCopy = canDisplay(image) && canDownload;
       if (canCopy) {
         var selectWrap = document.createElement("div");
         selectWrap.className = "image-select";
@@ -224,7 +236,7 @@
         var span = document.createElement("span");
         span.textContent = image.status === "failed"
           ? "图片未能提取"
-          : "浏览器无法直接预览，原始文件仍可下载";
+          : "浏览器无法直接预览或复制，原始文件仍可下载";
         fallbackBox.appendChild(strong);
         fallbackBox.appendChild(span);
         fallback.appendChild(fallbackBox);
@@ -277,20 +289,22 @@
         card.appendChild(errorText);
       }
 
-      if (canCopy) {
+      if (canDownload) {
         var actions = document.createElement("div");
         actions.className = "image-actions";
-        var copyBtn = document.createElement("button");
-        copyBtn.type = "button";
-        copyBtn.className = "ghost-btn";
-        copyBtn.textContent = "复制";
-        if (image.is_compatibility_format) {
-          copyBtn.title = "该格式可能需要先转换为 PNG 才能复制；下载可保留原文件";
+        if (canCopy) {
+          var copyBtn = document.createElement("button");
+          copyBtn.type = "button";
+          copyBtn.className = "ghost-btn";
+          copyBtn.textContent = "复制";
+          if (image.is_compatibility_format) {
+            copyBtn.title = "该格式可能需要先转换为 PNG 才能复制；下载可保留原文件";
+          }
+          copyBtn.addEventListener("click", function () {
+            copyImages([image]);
+          });
+          actions.appendChild(copyBtn);
         }
-        copyBtn.addEventListener("click", function () {
-          copyImages([image]);
-        });
-        actions.appendChild(copyBtn);
 
         var downloadLink = document.createElement("a");
         downloadLink.className = "ghost-btn";
@@ -312,23 +326,17 @@
   }
 
   function downloadOriginal(image) {
-    fetch(image.url).then(function (response) {
-      if (!response.ok) {
-        throw new Error("文件已过期或不存在，请重新提取");
-      }
-      return response.blob();
-    }).then(function (blob) {
-      var url = URL.createObjectURL(blob);
-      var link = document.createElement("a");
-      link.href = url;
-      link.download = image.filename || ("image-" + String(image.order).padStart(6, "0"));
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-    }).catch(function (error) {
-      toast("下载失败：" + (error.message || error), true);
-    });
+    if (!image.url) {
+      toast("没有可下载的文件", true);
+      return;
+    }
+    var url = image.url + (image.url.indexOf("?") >= 0 ? "&" : "?") + "download=1";
+    var frame = document.createElement("iframe");
+    frame.style.display = "none";
+    frame.src = url;
+    document.body.appendChild(frame);
+    setTimeout(function () { frame.remove(); }, 60000);
+    toast("已开始下载");
   }
 
   function downloadZip() {
@@ -379,13 +387,18 @@
     });
   }
 
+  function copySource(image) {
+    return image.preview_url || image.url;
+  }
+
   function loadBlob(image) {
-    if (state.blobs[image.url]) { return Promise.resolve(state.blobs[image.url]); }
-    return fetch(image.url).then(function (response) {
+    var source = copySource(image);
+    if (state.blobs[source]) { return Promise.resolve(state.blobs[source]); }
+    return fetch(source).then(function (response) {
       if (!response.ok) { throw new Error("读取图片失败"); }
       return response.blob();
     }).then(function (blob) {
-      state.blobs[image.url] = blob;
+      state.blobs[source] = blob;
       return blob;
     });
   }

@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 import tempfile
 import time
 import uuid
@@ -35,8 +36,12 @@ MIME = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
+    ".jpe": "image/jpeg",
+    ".jfif": "image/jpeg",
     ".gif": "image/gif",
     ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".ico": "image/x-icon",
     ".bmp": "image/bmp",
     ".tif": "image/tiff",
     ".tiff": "image/tiff",
@@ -105,6 +110,29 @@ class Handler(BaseHTTPRequestHandler):
         ext = target.suffix.lower()
         return self._send_bytes(target.read_bytes(), MIME.get(ext, "application/octet-stream"))
 
+    def _recover_asset_job(self, token):
+        if not re.fullmatch(r"[0-9a-f]{32}", token or ""):
+            return None
+        roots = [
+            Path(tempfile.gettempdir()) / "quicktranser_out",
+            Path(tempfile.gettempdir()) / "quicktranser_word_images",
+            Path(tempfile.gettempdir()) / "quicktranser_pdfword",
+            Path(tempfile.gettempdir()) / "quicktranser_pdfimage",
+            Path(tempfile.gettempdir()) / "quicktranser_excel",
+            Path(tempfile.gettempdir()) / "quicktranser_excel_json",
+        ]
+        for root in roots:
+            base = root / token
+            if not base.is_dir():
+                continue
+            for assets in list(base.glob("assets")) + list(base.glob("*.assets")):
+                if assets.is_dir():
+                    return {"assets_dir": assets, "stem": token, "md_path": None}
+            for assets in base.rglob("assets"):
+                if assets.is_dir():
+                    return {"assets_dir": assets, "stem": token, "md_path": None}
+        return None
+
     def _serve_asset(self, path, query=""):
         parts = path[len("/api/assets/"):].split("/", 1)
         if len(parts) != 2:
@@ -112,6 +140,10 @@ class Handler(BaseHTTPRequestHandler):
         token, name = parts
         name = unquote(name)
         job = _JOBS.get(token)
+        if not job:
+            job = self._recover_asset_job(token)
+            if job:
+                _JOBS[token] = job
         if not job:
             return self._send_json({"error": "not found"}, 404)
         base_dir = Path(job["assets_dir"]).resolve()
