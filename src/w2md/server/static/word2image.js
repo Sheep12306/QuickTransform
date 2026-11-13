@@ -546,24 +546,38 @@
     hide(dropPanel);
     hide(result);
     show(statusPanel);
-    statusText.textContent = "正在提取 " + file.name + " 中的图片…";
+    statusText.textContent = "正在上传 " + file.name + " …";
 
-    fetch("/api/word2image/extract?filename=" + encodeURIComponent(file.name), {
-      method: "POST",
-      body: file
-    }).then(function (response) {
-      return window.qtParseApiResponse(response).then(function (data) {
-        return { ok: response.ok, data: data };
-      });
-    }).then(function (res) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(
+      "POST",
+      "/api/word2image/extract?filename=" + encodeURIComponent(file.name)
+    );
+    xhr.upload.onprogress = function (event) {
+      if (event.lengthComputable) {
+        statusText.textContent = "正在上传 " +
+          Math.round(event.loaded / event.total * 100) + "% …";
+      }
+    };
+    xhr.upload.onload = function () {
+      statusText.textContent = "上传完成，正在提取图片…";
+    };
+    xhr.onload = function () {
       hide(statusPanel);
-      if (!res.ok) {
+      var data;
+      try {
+        data = window.qtParseXhrResponse(xhr);
+      } catch (error) {
         show(dropPanel);
-        toast(res.data.error || "提取失败", true);
+        toast("提取失败：" + error.message, true);
+        return;
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        show(dropPanel);
+        toast(data.error || "提取失败", true);
         return;
       }
 
-      var data = res.data || {};
       state.token = data.token || "";
       state.filename = data.filename || file.name;
       state.images = data.images || [];
@@ -584,11 +598,13 @@
       renderGallery();
       show(result);
       prefetchBlobs();
-    }).catch(function (error) {
+    };
+    xhr.onerror = function () {
       hide(statusPanel);
       show(dropPanel);
-      toast("提取失败：" + (error.message || error), true);
-    });
+      toast("网络错误，上传失败", true);
+    };
+    xhr.send(file);
   }
 
   function reset() {

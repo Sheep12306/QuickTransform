@@ -352,36 +352,53 @@
     show(statusPanel);
     hide(dropPanel);
     hide(result);
-    statusText.textContent = "正在转换 " + file.name + " …";
+    statusText.textContent = "正在上传 " + file.name + " …";
 
     var styles = styleToggle.checked ? "html" : "drop";
     var assets = assetValue;
-    fetch("/api/convert?filename=" + encodeURIComponent(file.name) + "&styles=" + styles + "&assets=" + assets, {
-      method: "POST",
-      body: file
-    }).then(function (resp) {
-      return window.qtParseApiResponse(resp).then(function (data) {
-        return { ok: resp.ok, data: data };
-      });
-    }).then(function (res) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(
+      "POST",
+      "/api/convert?filename=" + encodeURIComponent(file.name) +
+      "&styles=" + styles + "&assets=" + assets
+    );
+    xhr.upload.onprogress = function (event) {
+      if (event.lengthComputable) {
+        statusText.textContent = "正在上传 " +
+          Math.round(event.loaded / event.total * 100) + "% …";
+      }
+    };
+    xhr.upload.onload = function () {
+      statusText.textContent = "上传完成，正在转换…";
+    };
+    xhr.onload = function () {
       hide(statusPanel);
-      if (!res.ok) {
-        showError(res.data.error || "转换失败");
+      var data;
+      try {
+        data = window.qtParseXhrResponse(xhr);
+      } catch (error) {
+        showError(error.message);
         return;
       }
-      current.filename = res.data.filename;
-      current.markdown = res.data.markdown;
-      current.images = res.data.images || [];
-      current.downloadUrl = res.data.download_url || null;
-      source.value = res.data.markdown;
+      if (xhr.status < 200 || xhr.status >= 300) {
+        showError(data.error || "转换失败");
+        return;
+      }
+      current.filename = data.filename;
+      current.markdown = data.markdown;
+      current.images = data.images || [];
+      current.downloadUrl = data.download_url || null;
+      source.value = data.markdown;
       renderIntoPreview(buildPreviewMarkdown(source.value));
-      fillReport(res.data.report);
+      fillReport(data.report);
       show(result);
       fitPanes();
-    }).catch(function (err) {
+    };
+    xhr.onerror = function () {
       hide(statusPanel);
-      showError(String(err));
-    });
+      showError("网络错误，上传失败");
+    };
+    xhr.send(file);
   }
 
   dropzone.addEventListener("click", function () { fileInput.click(); });
