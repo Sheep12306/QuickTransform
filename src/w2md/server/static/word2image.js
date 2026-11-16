@@ -41,13 +41,9 @@
     "image/avif", "image/x-icon", "image/vnd.microsoft.icon",
     "image/bmp", "image/svg+xml"
   ];
-  var MAX_CLIPBOARD_IMAGES = 20;
-  // Shown even when the document has no image of that format, so the filter
-  // always reads like a format list instead of only echoing the current file.
-  var COMMON_FORMATS = [
-    "PNG", "JPG", "GIF", "WEBP", "BMP", "SVG",
-    "TIF", "EMF", "WMF", "ICO", "AVIF", "嵌入文件", "其他"
-  ];
+  var MAX_CLIPBOARD_IMAGES = 30;
+  // ShowDoc 常用格式就这几种；其余格式统一归到「其他」。
+  var COMMON_FORMATS = ["PNG", "JPG", "SVG", "嵌入文件", "其他"];
 
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
@@ -121,10 +117,13 @@
     if (image.compatibility === "embedded") { return "嵌入文件"; }
     var format = (image.source_format || image.upload_format ||
       (image.extension || "").replace(".", "")).toLowerCase();
-    if (format === "jpg" || format === "jpeg") { return "JPG"; }
-    if (format === "tif" || format === "tiff") { return "TIF"; }
-    if (!format) { return "其他"; }
-    return format.toUpperCase();
+    if (format === "png") { return "PNG"; }
+    if (format === "jpg" || format === "jpeg" || format === "jpe" ||
+        format === "jfif") {
+      return "JPG";
+    }
+    if (format === "svg") { return "SVG"; }
+    return "其他";
   }
 
   function compatibilityLabel(image) {
