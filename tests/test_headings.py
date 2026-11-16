@@ -108,9 +108,11 @@ NUMBERING = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:numbering>"""
 
 
-def paragraph(text, style=None, outline=None, runs=None, num_id=None, ilvl=None):
+def paragraph(
+    text, style=None, outline=None, runs=None, num_id=None, ilvl=None, indent=None
+):
     ppr = ""
-    if style or outline is not None or num_id is not None:
+    if style or outline is not None or num_id is not None or indent is not None:
         ppr = "<w:pPr>"
         if style:
             ppr += '<w:pStyle w:val="{0}"/>'.format(style)
@@ -120,6 +122,8 @@ def paragraph(text, style=None, outline=None, runs=None, num_id=None, ilvl=None)
             )
         if outline is not None:
             ppr += '<w:outlineLvl w:val="{0}"/>'.format(outline)
+        if indent is not None:
+            ppr += '<w:ind w:left="{0}"/>'.format(indent)
         ppr += "</w:pPr>"
     if runs is None:
         runs = "<w:r><w:t>{0}</w:t></w:r>".format(text)
@@ -388,6 +392,85 @@ class HeadingTest(unittest.TestCase):
             ["font", "font"],
         )
         self.assertTrue(any(w.kind == "heading_font_fallback" for w in report.warnings))
+
+    def test_typed_ordered_numbers_are_not_reparsed(self):
+        # Raw "1. " at the start of a paragraph makes Markdown emit an ordered
+        # list, which renumbers the item.  The typed number must stay literal;
+        # NBSP after the marker prevents list parsing.
+        body = "".join(
+            [
+                paragraph("1. 第一项"),
+                paragraph("2. 第二项"),
+                paragraph("3）第三项"),
+            ]
+        )
+        markdown, _, _ = self.convert_markdown(body)
+
+        self.assertIn("1.\u00a0第一项", markdown)
+        self.assertIn("2.\u00a0第二项", markdown)
+        self.assertIn("3）第三项", markdown)
+
+    def test_left_indent_recovers_nested_bullet_with_ilvl_zero(self):
+        # Word documents produced by Chinese WPS/Office often keep every level
+        # at ilvl=0 and encode nesting only through w:ind.
+        body = "".join(
+            [
+                paragraph("根项目", num_id=2, ilvl=0, indent=425),
+                paragraph("子项目", num_id=2, ilvl=0, indent=1050),
+                paragraph("孙项目", num_id=2, ilvl=0, indent=1260),
+            ]
+        )
+        markdown, _, _ = self.convert_markdown(body)
+
+        self.assertIn("• 根项目", markdown)
+        self.assertIn("　• 子项目", markdown)
+        self.assertIn("　　• 孙项目", markdown)
+
+    def test_typed_number_and_bullet_keep_their_indent(self):
+        body = "".join(
+            [
+                paragraph("1. 主项", indent=425),
+                paragraph("                   • 子项", indent=1050),
+            ]
+        )
+        markdown, _, _ = self.convert_markdown(body)
+
+        self.assertIn("1.\u00a0主项", markdown)
+        self.assertIn("　• 子项", markdown)
+        self.assertNotIn("                   • 子项", markdown)
+
+    def test_circle_and_square_bullet_glyphs(self):
+        numbering = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:abstractNum w:abstractNumId="20">
+    <w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val=""/></w:lvl>
+  </w:abstractNum>
+  <w:abstractNum w:abstractNumId="21">
+    <w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val=""/></w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="20"><w:abstractNumId w:val="20"/></w:num>
+  <w:num w:numId="21"><w:abstractNumId w:val="21"/></w:num>
+</w:numbering>"""
+        body = paragraph("圆形项目", num_id=20) + paragraph("方形项目", num_id=21)
+        markdown, _, _ = self.convert_markdown(body, numbering=numbering)
+
+        self.assertIn("○ 圆形项目", markdown)
+        self.assertIn("□ 方形项目", markdown)
+
+    def test_number_counter_advances_for_empty_numbered_paragraph(self):
+        # An empty numbered paragraph still consumes a Word number; skipping
+        # it would shift every following label by one.
+        body = "".join(
+            [
+                paragraph("第一项", num_id=1, ilvl=0),
+                paragraph("", num_id=1, ilvl=0),
+                paragraph("第三项", num_id=1, ilvl=0),
+            ]
+        )
+        markdown, _, _ = self.convert_markdown(body)
+
+        self.assertIn("1.\u00a0第一项", markdown)
+        self.assertIn("3. 第三项", markdown)
 
     def test_outline_level_9_is_body_text(self):
         body = paragraph("显式正文", style="Heading1", outline=9)

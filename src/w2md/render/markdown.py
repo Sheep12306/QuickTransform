@@ -1,6 +1,7 @@
 """IR to Markdown rendering."""
 
 import html as html_module
+import re
 
 from ..ir.nodes import (
     Bold,
@@ -68,6 +69,32 @@ def _style_key(node):
     return None
 
 
+# A paragraph that literally starts with "1. " / "1) " would be parsed by
+# Markdown as an ordered list and renumbered from 1.  NBSP is not a Markdown
+# list separator, so it keeps the typed number visible without renumbering.
+_ORDERED_START = re.compile(r"^( {0,3}[0-9]{1,9}[.)])[ \t]+")
+# Four or more leading ASCII spaces make Markdown emit a code block.  Word
+# uses literal spaces to indent some paragraphs (often image-only ones), so
+# convert longer runs into full-width spaces which stay plain text.
+_LEADING_WHITESPACE = re.compile(r"^[ \t]{4,}")
+MAX_LEADING_INDENT = 6
+
+
+def _protect_ordered_start(text):
+    match = _ORDERED_START.match(text)
+    if match is None:
+        return text
+    return match.group(1) + "\u00a0" + text[match.end():]
+
+
+def _normalize_leading_indent(text):
+    match = _LEADING_WHITESPACE.match(text)
+    if match is None:
+        return text
+    depth = min((len(match.group(0)) + 1) // 2, MAX_LEADING_INDENT)
+    return "　" * depth + text[match.end():]
+
+
 def _render_block(block, heading_offset, inline_style):
     if isinstance(block, Heading):
         raw_level = block.level + heading_offset
@@ -77,7 +104,10 @@ def _render_block(block, heading_offset, inline_style):
             text = "〔H{0}〕 ".format(block.level) + text
         return "#" * level + " " + text
     if isinstance(block, Paragraph):
-        return _render_inlines(block.children, inline_style)
+        text = _render_inlines(block.children, inline_style)
+        if not text.strip():
+            return ""
+        return _protect_ordered_start(_normalize_leading_indent(text))
     if isinstance(block, Table):
         return _render_table(block, inline_style)
     return ""

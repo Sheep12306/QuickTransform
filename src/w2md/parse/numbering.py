@@ -26,23 +26,28 @@ NON_HEADING_FORMATS = {"bullet", "none", "picture"}
 _PERCENT = re.compile(r"%([1-9])")
 _CHINESE_DIGITS = "零一二三四五六七八九"
 
-# Wingdings / Symbol private-use bullets commonly written by Word.
+# Wingdings / Symbol private-use bullets commonly written by Word.  Escapes
+# are used for the keys because several private-use code points are invisible.
 _BULLET_GLYPHS = {
-    "": "●",
-    "": "■",
-    "": "◆",
-    "": "▪",
-    "": "▪",
-    "": "•",
-    "": "➢",
-    "": "➢",
-    "": "✓",
-    "": "○",
-    "": "○",
-    "": "•",
-    "": "◆",
-    "": "➢",
-    "·": "•",
+    "": "●",  # ●
+    "": "■",  # ■
+    "": "◆",  # ◆
+    "": "❖",  # ❖
+    "": "◇",  # ◇
+    "": "○",  # ○
+    "": "○",  # ○
+    "": "○",  # ○
+    "": "▪",  # ▪
+    "": "□",  # □
+    "": "•",  # •
+    "": "•",  # •
+    "": "•",  # •
+    "": "➢",  # ➢
+    "": "➢",  # ➢
+    "": "➢",  # ➢
+    "": "✓",  # ✓
+    "": "◆",  # ◆
+    "·": "•",  # ·
 }
 
 _ROMAN_VALUES = (
@@ -94,6 +99,15 @@ def _level_from_xml(level):
     if pstyle_el is not None:
         pstyle = pstyle_el.get(W + "val")
 
+    # A numbering level often carries its own left indent; paragraphs that
+    # rely on it have no ``w:ind`` of their own, so keep it for layout.
+    left = None
+    ppr_el = level.find(W + "pPr")
+    if ppr_el is not None:
+        ind_el = ppr_el.find(W + "ind")
+        if ind_el is not None:
+            left = _int(ind_el.get(W + "left") or ind_el.get(W + "start"))
+
     return {
         "ilvl": _int(ilvl, 0),
         "format": num_format,
@@ -102,6 +116,7 @@ def _level_from_xml(level):
         "restart": restart,
         "suff": suff,
         "pstyle": pstyle,
+        "left": left,
     }
 
 
@@ -307,11 +322,9 @@ def _bullet_text(text):
     for char in text:
         code = ord(char)
         if 0xF000 <= code <= 0xF0FF:
-            mapped = _BULLET_GLYPHS.get(char)
-            if mapped is None:
-                base = chr(code - 0xF000)
-                mapped = base if base.isprintable() and not base.isspace() else "•"
-            chars.append(mapped)
+            # Unknown private-use glyphs would otherwise turn into stray
+            # ASCII letters ("n", "s", ...); fall back to a plain bullet.
+            chars.append(_BULLET_GLYPHS.get(char, "•"))
         else:
             chars.append(char)
     result = "".join(chars).strip()
