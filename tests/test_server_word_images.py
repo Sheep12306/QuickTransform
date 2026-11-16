@@ -51,12 +51,16 @@ class WordImageEndpointTest(unittest.TestCase):
 
                 self.assertEqual(body["summary"]["occurrences"], 6)
                 self.assertEqual(body["summary"]["failed"], 1)
+                self.assertEqual(body["summary"]["converted"], 1)
+                self.assertEqual(body["summary"]["conversion_failed"], 1)
                 self.assertEqual(len(body["images"]), 6)
                 first = body["images"][0]
                 self.assertEqual(first["placeholder"], "{{SHOWDOC_IMAGE_000001}}")
                 self.assertEqual(first["order"], 1)
                 self.assertTrue(first["sha256_verified"])
                 self.assertEqual(first["status"], "extracted")
+                self.assertEqual(first["compatibility"], "supported")
+                self.assertTrue(first["upload_sha256"])
 
                 with urllib.request.urlopen(base + first["url"]) as response:
                     raw = response.read()
@@ -65,6 +69,16 @@ class WordImageEndpointTest(unittest.TestCase):
                 failed = [image for image in body["images"] if image["status"] == "failed"]
                 self.assertEqual(len(failed), 1)
                 self.assertIn("rIdMissing", failed[0]["error"])
+                converted = [
+                    image
+                    for image in body["images"]
+                    if image["compatibility"] == "converted"
+                ]
+                self.assertEqual(len(converted), 1)
+                self.assertEqual(converted[0]["source_format"], "emf")
+                self.assertEqual(converted[0]["upload_format"], "png")
+                self.assertTrue(converted[0]["upload_url"])
+                self.assertTrue(converted[0]["source_url"])
 
                 with urllib.request.urlopen(base + body["manifest_url"]) as response:
                     manifest = json.loads(response.read().decode("utf-8"))

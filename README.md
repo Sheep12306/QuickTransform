@@ -2,7 +2,7 @@
 
 Word（.docx）转 Markdown 的本地工具，面向进销存产品文档。
 
-当前进度：M0 骨架 + 本地网页界面。已支持段落、标题（样式的大纲级别与名称匹配）、加粗/斜体行内格式、转换报告，以及按正文顺序提取 Word 图片并生成 ShowDoc 占位符。
+当前进度：M0 骨架 + 本地网页界面。已支持段落、标题（样式的大纲级别与名称匹配）、加粗/斜体行内格式、转换报告、按正文顺序提取 Word 图片、图片兼容性预检（EMF/WMF/TIFF 转 PNG、超大 PNG 生成预览）、生成 manifest，以及导入浏览器扩展的上传记录、只替换成功图片并输出缺失清单。
 
 ## 运行
 
@@ -32,9 +32,10 @@ Word（.docx）转 Markdown 的本地工具，面向进销存产品文档。
 
 输出：
 
-- `output\<文档名>.md`：图片位置为 `{{SHOWDOC_IMAGE_000001}}` 形式的占位符
-- `output\assets\`：按正文顺序提取的原始图片（字节直拷）
-- `output\assets\manifest.json`：占位符、relationship id、原始 media 路径、SHA-256、alt 文本、兼容格式状态等
+- `output\<文档名>.md`：正常图片为 `{{SHOWDOC_IMAGE_000001}}` 占位符；不支持/超限/转换失败的图片使用特殊占位符
+- `output\assets\original\`：按正文顺序提取的原始图片（字节直拷）
+- `output\assets\upload\`：上传副本（普通图片原样复制，EMF/WMF/TIFF 转 PNG，超大图片生成预览）
+- `output\assets\manifest.json`：占位符、`occurrence_id`、原始/上传路径、`source_sha256` / `upload_sha256`、兼容性分类、章节与上下文
 
 网页版独立图片工具（只展示图片，不生成 Markdown，支持格式筛选、勾选复制、打包下载）：
 
@@ -44,7 +45,7 @@ http://127.0.0.1:8000/word2image.html
 
 图片模块说明见 [docs/IMAGE_EXTRACTION.md](docs/IMAGE_EXTRACTION.md)。
 
-## 占位替换工具
+## 占位替换工具（旧模式）
 
 把 ShowDoc 返回的图片 URL 按顺序填回 Markdown 占位符：
 
@@ -59,6 +60,25 @@ http://127.0.0.1:8000/placeholder_replace.html
 ```
 
 详细说明见 [docs/PLACEHOLDER_REPLACE.md](docs/PLACEHOLDER_REPLACE.md)。
+
+## 上传结果导入（推荐）
+
+浏览器扩展「ShowDoc 图片上传记录器」会监听每张图片的上传请求并导出 `upload_result.json`。本工具按 `occurrence_id` / 占位符 / `upload_sha256` 显式映射，只替换真正成功的图片；失败图片保留占位符，EMF 转换副本使用 `upload_sha256` 匹配，特殊占位符保持不动：
+
+```text
+http://127.0.0.1:8000/upload_result.html
+```
+
+支持部分成功、严格、只补齐遗留占位符三种模式，输出最终 Markdown、`missing_images.csv`、`replacement_report.json` 和可选的 `missing_images.html`。命令行：
+
+```powershell
+.tools\python312\python.exe -m w2md apply-upload-result output\文档.md `
+  --upload-result upload_result.json `
+  --manifest output\assets\manifest.json `
+  -o output\final --mode partial --confirm-partial
+```
+
+详细说明见 [docs/UPLOAD_RESULT.md](docs/UPLOAD_RESULT.md)。
 
 ## 标题层级识别
 

@@ -7,7 +7,7 @@ name = "quicktranser"
 version = "0.1.0"
 description = "Word (.docx) to Markdown converter for ERP product docs"
 requires-python = ">=3.11"
-dependencies = ["lxml>=5"]
+dependencies = ["lxml>=5", "Pillow>=10", "PyMuPDF>=1.24"]
 
 [project.scripts]
 w2md = "w2md.cli:main"

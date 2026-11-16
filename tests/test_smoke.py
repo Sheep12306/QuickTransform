@@ -113,7 +113,12 @@ class ConversionTest(unittest.TestCase):
             self.assertNotIn("data:image", markdown)
             self.assertFalse((tmp / "sample_prd.assets").exists())
             self.assertTrue((tmp / "assets" / "manifest.json").is_file())
-            self.assertTrue((tmp / "assets" / "sample_prd-image-000001.png").is_file())
+            self.assertTrue(
+                (tmp / "assets" / "original" / "sample_prd-image-000001.png").is_file()
+            )
+            self.assertTrue(
+                (tmp / "assets" / "upload" / "sample_prd-image-000001.png").is_file()
+            )
             self.assertEqual(report.stats["images"], 1)
             self.assertEqual(report.stats["image_occurrences"], 1)
             self.assertTrue(any(w.kind == "image_placeholder" for w in report.warnings))

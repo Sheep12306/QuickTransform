@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ShowDoc 上传结果导入 - QuickTransform</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="word2image.css">
+  <link rel="stylesheet" href="placeholder_replace.css">
+  <link rel="stylesheet" href="upload_result.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">W→✓</span>
+      <div class="brand-text">
+        <h1>QuickTransform</h1>
+        <p>ShowDoc 上传结果导入</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="home-link" href="/">返回首页</a>
+      <div class="topbar-status">本地运行 · 不登录 ShowDoc</div>
+    </div>
+  </header>
+
+  <main class="layout replace-layout">
+    <section class="image-hero">
+      <h2>只替换真正上传成功的图片</h2>
+      <p>导入浏览器扩展导出的 upload_result.json，按 occurrence_id / 占位符 / upload_sha256 显式映射到 URL。失败图片保留占位符；EMF 转换副本用 PNG 哈希匹配；不支持、超限、转换失败的图片保持特殊占位符，不会整体错位。</p>
+    </section>
+
+    <section class="replace-inputs">
+      <article class="input-card">
+        <header class="input-head">
+          <h3>1. 带占位符的 Markdown</h3>
+          <label class="file-pick">
+            选择 .md
+            <input type="file" id="markdown-file" accept=".md,.markdown,text/plain" hidden>
+          </label>
+        </header>
+        <textarea id="markdown-text" spellcheck="false" placeholder="粘贴包含 {{SHOWDOC_IMAGE_000001}} 的 Markdown"></textarea>
+        <p class="input-name" id="markdown-name"></p>
+      </article>
+
+      <article class="input-card">
+        <header class="input-head">
+          <h3>2. upload_result.json</h3>
+          <label class="file-pick">
+            选择 .json
+            <input type="file" id="upload-file" accept=".json,application/json" hidden>
+          </label>
+        </header>
+        <div class="json-summary" id="upload-summary">
+          <p>浏览器扩展导出的上传记录。需要由扩展独立生成，本工具不登录 ShowDoc。</p>
+          <ul class="summary-list" id="upload-summary-list"></ul>
+        </div>
+        <p class="input-name" id="upload-name"></p>
+      </article>
+    </section>
+
+    <section class="replace-optional">
+      <label class="file-pick">
+        上传 manifest.json
+        <input type="file" id="manifest-file" accept=".json,application/json" hidden>
+      </label>
+      <span class="optional-name" id="manifest-name">未上传 manifest（无法交叉校验与生成完整缺失清单）</span>
+      <label class="file-pick">
+        选择原图（可选）
+        <input type="file" id="image-files" accept="image/*,.emf,.wmf,.tif,.tiff" multiple hidden>
+      </label>
+      <span class="optional-name" id="image-count">未选择图片，缺失清单没有缩略图</span>
+    </section>
+
+    <section class="mode-panel">
+      <div class="mode-row">
+        <strong>处理模式</strong>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="partial" checked>
+          <span><b>部分成功</b>（默认）成功替换，失败保留占位符并生成缺失清单</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="strict">
+          <span><b>严格</b>所有普通图片成功、且没有特殊占位符时才生成</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="fill_remaining">
+          <span><b>只补齐遗留占位符</b>只处理当前 Markdown 中仍存在的占位符</span>
+        </label>
+      </div>
+      <label class="review-option">
+        <input type="checkbox" id="allow-mismatch">
+        <span>允许 document_id / 占位符 / SHA-256 不一致后继续（不一致的图片仍保留占位符，需人工核对）</span>
+      </label>
+    </section>
+
+    <div class="replace-actions">
+      <button class="quick-btn" id="analyze-btn" type="button">预览替换结果</button>
+      <button class="quick-btn" id="generate-btn" type="button" disabled>生成最终 Markdown</button>
+      <button class="ghost-btn" id="export-csv" type="button" disabled>导出缺失清单</button>
+      <button class="ghost-btn" id="clear-btn" type="button">清空</button>
+    </div>
+
+    <section class="analysis-panel hidden" id="analysis-panel">
+      <div class="count-grid">
+        <span class="count-item">manifest 图片 <b id="count-manifest">0</b></span>
+        <span class="count-item">目标图片 <b id="count-target">0</b></span>
+        <span class="count-item">Markdown 占位符 <b id="count-placeholders">0</b></span>
+        <span class="count-item">成功 <b id="count-success">0</b></span>
+        <span class="count-item">失败 <b id="count-failed">0</b></span>
+        <span class="count-item">未上传 <b id="count-not-uploaded">0</b></span>
+        <span class="count-item">无法匹配 <b id="count-unmatched">0</b></span>
+        <span class="count-item">待定/中断 <b id="count-pending">0</b></span>
+        <span class="count-item">已转图片 <b id="count-converted">0</b></span>
+        <span class="count-item">不支持 <b id="count-unsupported">0</b></span>
+        <span class="count-item">超限 <b id="count-oversized">0</b></span>
+        <span class="count-item">转换失败 <b id="count-conversion-failed">0</b></span>
+        <span class="count-item">特殊占位符 <b id="count-special">0</b></span>
+        <span class="count-item">意外上传 <b id="count-unexpected">0</b></span>
+        <span class="count-item">需人工确认 <b id="count-review">0</b></span>
+        <span class="count-item">清单外占位符 <b id="count-unknown">0</b></span>
+        <span class="count-item">正文缺占位符 <b id="count-missing-md">0</b></span>
+        <span class="count-item">代码块跳过 <b id="count-code">0</b></span>
+      </div>
+      <p class="consistency" id="consistency"></p>
+      <ul class="message-list error-list hidden" id="error-list"></ul>
+      <ul class="message-list warning-list hidden" id="warning-list"></ul>
+    </section>
+
+    <section class="mapping-panel hidden" id="mapping-panel">
+      <div class="panel-head">
+        <h3>逐张预览</h3>
+        <span id="mapping-summary"></span>
+      </div>
+      <div class="mapping-scroll">
+        <table class="mapping-table upload-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>缩略图</th>
+              <th>占位符 / 文件</th>
+              <th>结果</th>
+              <th>URL / 原因</th>
+              <th>章节与上下文</th>
+            </tr>
+          </thead>
+          <tbody id="mapping-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="result-panel hidden" id="result-panel">
+      <div class="panel-head">
+        <h3>最终 Markdown</h3>
+        <div class="result-actions">
+          <button class="ghost-btn" id="copy-result" type="button">复制</button>
+          <button class="ghost-btn" id="download-md" type="button">下载 .md</button>
+          <button class="ghost-btn" id="download-csv" type="button">下载 missing_images.csv</button>
+          <button class="ghost-btn" id="download-report" type="button">下载 replacement_report.json</button>
+          <button class="ghost-btn" id="download-html" type="button">下载 missing_images.html</button>
+        </div>
+      </div>
+      <textarea id="result-text" readonly spellcheck="false"></textarea>
+      <p class="result-note" id="result-note"></p>
+    </section>
+  </main>
+
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="api.js"></script>
+  <script src="upload_result.js"></script>
+</body>
+</html>

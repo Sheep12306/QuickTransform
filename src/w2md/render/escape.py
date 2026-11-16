@@ -6,13 +6,20 @@ import re
 _ESCAPE_CHARS = set(["\\", "`", "*", "[", "]", "_"])
 
 # ShowDoc image placeholders contain underscores and must survive verbatim so
-# the later URL replacement can match them exactly.
-_PLACEHOLDER = re.compile(r"\{\{SHOWDOC_IMAGE_[A-Z0-9_]+\}\}")
-_PLACEHOLDER_SPLIT = re.compile(r"(\{\{SHOWDOC_IMAGE_[A-Z0-9_]+\}\})")
+# the later URL replacement can match them exactly.  Normal and special
+# placeholders share the same rule.
+_PLACEHOLDER = re.compile(
+    r"\{\{(?:SHOWDOC_IMAGE_[A-Z0-9_]+|"
+    r"SHOWDOC_(?:UNSUPPORTED|OVERSIZED|CONVERSION_FAILED)_IMAGE_[A-Z0-9_]+)\}\}"
+)
+_PLACEHOLDER_SPLIT = re.compile(
+    r"(\{\{(?:SHOWDOC_IMAGE_[A-Z0-9_]+|"
+    r"SHOWDOC_(?:UNSUPPORTED|OVERSIZED|CONVERSION_FAILED)_IMAGE_[A-Z0-9_]+)\}\})"
+)
 
 
 def escape_text(text):
-    if "{{SHOWDOC_IMAGE_" not in text:
+    if "{{SHOWDOC_" not in text:
         return _escape_literal(text)
     parts = _PLACEHOLDER_SPLIT.split(text)
     return "".join(

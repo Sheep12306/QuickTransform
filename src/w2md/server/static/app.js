@@ -330,8 +330,10 @@
     statLines.innerHTML = "行数 <b>" + (stats.lines || 0) + "</b>";
     statChars.innerHTML = "字数 <b>" + (stats.chars || 0) + "</b>";
     var imageTotal = stats.image_occurrences || stats.images || 0;
-    var imageFailed = stats.image_failed || 0;
-    statImages.innerHTML = "图片 <b>" + imageTotal + "</b>" + (imageFailed ? " / 异常 <b>" + imageFailed + "</b>" : "");
+    var imageFailed = stats.image_special != null
+      ? stats.image_special
+      : (stats.image_failed || 0);
+    statImages.innerHTML = "图片 <b>" + imageTotal + "</b>" + (imageFailed ? " / 特殊 <b>" + imageFailed + "</b>" : "");
     var warnings = report.warnings || [];
     statWarnings.innerHTML = "警告 <b>" + warnings.length + "</b>";
     warningsList.innerHTML = "";

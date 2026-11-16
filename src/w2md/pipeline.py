@@ -36,12 +36,13 @@ from .report import Report
 _UNSUPPORTED_IMAGE_EXTS = {".emf", ".wmf"}
 
 
-def convert(source, output_dir, config=None, basename=None):
+def convert(source, output_dir, config=None, basename=None, source_name=None):
     config = config or Config()
     source = Path(source)
     output_dir = Path(output_dir)
     stem = _safe_stem(basename) if basename else source.stem
-    report = Report(source=str(source.name))
+    display_name = source_name or source.name
+    report = Report(source=str(display_name))
 
     with OpcPackage(source) as package:
         styles = None
@@ -72,6 +73,12 @@ def convert(source, output_dir, config=None, basename=None):
                     stem=stem,
                     report=report,
                     generate_previews=config.image_previews,
+                    styles=styles,
+                    source_file=display_name,
+                    markdown_file=stem + ".md",
+                    max_upload_bytes=config.max_upload_bytes,
+                    max_image_dimension=config.max_image_dimension,
+                    preview_max_dimension=config.preview_max_dimension,
                 )
             except Exception as exc:
                 report.add(
@@ -95,6 +102,14 @@ def convert(source, output_dir, config=None, basename=None):
                         "image_duplicates": extraction.summary.get("duplicates", 0),
                         "image_failed": extraction.summary.get("failed", 0),
                         "image_compatibility": extraction.summary.get("compatibility", 0),
+                        "image_supported": extraction.summary.get("supported", 0),
+                        "image_converted": extraction.summary.get("converted", 0),
+                        "image_oversized": extraction.summary.get("oversized", 0),
+                        "image_conversion_failed": extraction.summary.get(
+                            "conversion_failed", 0
+                        ),
+                        "image_unsupported": extraction.summary.get("unsupported", 0),
+                        "image_special": extraction.summary.get("special", 0),
                         "image_placeholders": replaced_count,
                         "image_manifest": "assets/manifest.json",
                     }

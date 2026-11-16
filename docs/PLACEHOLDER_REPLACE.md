@@ -1,6 +1,8 @@
-# 占位替换工具
+# 占位替换工具（旧模式）
 
 把 ShowDoc 返回的图片 URL 按顺序填回 Markdown 中的 `{{SHOWDOC_IMAGE_000001}}` 占位符。
+
+> **部分图片上传失败时请不要使用本页面。** 本页面按成功 URL 的出现顺序建立映射；只要中间有一张失败，后面的 URL 就会整体错位。请使用 [上传结果导入](UPLOAD_RESULT.md)，它按 `occurrence_id / 占位符 / upload_sha256` 显式映射，失败图片与 `unsupported` / `oversized` / `conversion_failed` 特殊占位符都会保留，且不会影响后续图片。
 
 ## 使用场景
 

@@ -60,15 +60,46 @@
   }
 
   function extensionLabel(image) {
-    return (image.extension || "").replace(".", "").toUpperCase() || "未知";
+    var format = image.upload_format || image.source_format ||
+      (image.extension || "").replace(".", "");
+    return (format || "未知").toUpperCase();
+  }
+
+  function hasUpload(image) {
+    if (image.upload_url || image.upload_path) { return true; }
+    if (image.preview_url) { return true; }
+    if (!image.compatibility) { return !!image.url; }
+    return image.compatibility === "supported" || image.compatibility === "converted";
+  }
+
+  function hasSource(image) {
+    return !!(image.source_url || image.source_path || image.url);
+  }
+
+  function uploadSource(image) {
+    return image.upload_url || image.preview_url || image.url || "";
+  }
+
+  function sourceSource(image) {
+    return image.source_url || image.url || "";
   }
 
   function srcFor(image) {
-    return image.preview_url || image.url || "";
+    return uploadSource(image);
   }
 
   function canDisplay(image) {
-    if (image.preview_url) { return true; }
+    if (!hasUpload(image)) { return false; }
+    if (image.preview_url || image.upload_url) {
+      var uploadFormat = (image.upload_format || "").toLowerCase();
+      if (
+        DISPLAYABLE.indexOf("." + uploadFormat) >= 0 ||
+        !uploadFormat ||
+        image.preview_url
+      ) {
+        return true;
+      }
+    }
     if (DISPLAYABLE.indexOf((image.extension || "").toLowerCase()) >= 0) {
       return true;
     }
@@ -76,11 +107,23 @@
   }
 
   function formatKey(image) {
-    var extension = (image.extension || "").toLowerCase();
-    if (extension === ".jpg" || extension === ".jpeg") { return "JPG"; }
-    if (extension === ".tif" || extension === ".tiff") { return "TIF"; }
-    if (!extension) { return "其他"; }
-    return extension.replace(".", "").toUpperCase();
+    var format = (image.source_format || image.upload_format ||
+      (image.extension || "").replace(".", "")).toLowerCase();
+    if (format === "jpg" || format === "jpeg") { return "JPG"; }
+    if (format === "tif" || format === "tiff") { return "TIF"; }
+    if (!format) { return "其他"; }
+    return format.toUpperCase();
+  }
+
+  function compatibilityLabel(image) {
+    var labels = {
+      supported: "支持",
+      converted: "已转 PNG",
+      oversized: "超限预览",
+      conversion_failed: "转换失败",
+      unsupported: "不支持"
+    };
+    return labels[image.compatibility] || "";
   }
 
   function visibleEntries() {
@@ -95,13 +138,13 @@
 
   function copyableImages() {
     return visibleEntries().map(function (entry) { return entry.image; }).filter(function (image) {
-      return !!image.url && image.status !== "failed";
+      return hasUpload(image);
     });
   }
 
   function selectedImages() {
     return state.images.filter(function (image, index) {
-      return state.selected[index] && !!image.url && image.status !== "failed";
+      return state.selected[index] && hasUpload(image);
     });
   }
 
@@ -190,10 +233,13 @@
       var card = document.createElement("article");
       card.className = "image-card";
       card.setAttribute("data-index", String(index));
-      if (image.status === "failed") { card.classList.add("failed"); }
+      if (image.status === "failed" || image.compatibility === "conversion_failed" ||
+          image.compatibility === "unsupported" || image.compatibility === "oversized") {
+        card.classList.add("failed");
+      }
 
-      var canDownload = !!image.url && image.status !== "failed";
-      var canCopy = canDisplay(image) && canDownload;
+      var canDownload = hasSource(image);
+      var canCopy = hasUpload(image) && canDisplay(image);
       if (canCopy) {
         var selectWrap = document.createElement("div");
         selectWrap.className = "image-select";
@@ -238,9 +284,13 @@
         var strong = document.createElement("strong");
         strong.textContent = extensionLabel(image);
         var span = document.createElement("span");
-        span.textContent = image.status === "failed"
-          ? "图片未能提取"
-          : "浏览器无法直接预览或复制，原始文件仍可下载";
+        if (image.status === "failed" && !hasSource(image)) {
+          span.textContent = "图片未能提取";
+        } else if (!hasUpload(image)) {
+          span.textContent = "没有可上传副本，原始文件仍可下载";
+        } else {
+          span.textContent = "浏览器无法直接预览或复制，原始文件仍可下载";
+        }
         fallbackBox.appendChild(strong);
         fallbackBox.appendChild(span);
         fallback.appendChild(fallbackBox);
@@ -271,29 +321,29 @@
         duplicateBadge.title = "与 " + (image.duplicate_of || "前一张") + " 使用同一媒体文件";
         meta.appendChild(duplicateBadge);
       }
-      if (image.is_compatibility_format) {
+      var compatibility = compatibilityLabel(image);
+      if (compatibility) {
         var compatBadge = document.createElement("span");
-        compatBadge.className = "badge badge-warn";
-        compatBadge.textContent = "兼容格式";
+        compatBadge.className = "badge " + (
+          image.compatibility === "supported" ? "" :
+          image.compatibility === "converted" ? "badge-ok" : "badge-error"
+        );
+        compatBadge.textContent = compatibility;
+        compatBadge.title = image.compatibility_reason || compatibility;
         meta.appendChild(compatBadge);
-      }
-      if (image.status === "failed") {
-        var failedBadge = document.createElement("span");
-        failedBadge.className = "badge badge-error";
-        failedBadge.textContent = "失败";
-        meta.appendChild(failedBadge);
       }
       info.appendChild(meta);
       card.appendChild(info);
 
-      if (image.error) {
+      var reasonText = image.compatibility_reason || image.error;
+      if (reasonText) {
         var errorText = document.createElement("div");
         errorText.className = "image-error";
-        errorText.textContent = image.error;
+        errorText.textContent = reasonText;
         card.appendChild(errorText);
       }
 
-      if (canDownload) {
+      if (canDownload || canCopy) {
         var actions = document.createElement("div");
         actions.className = "image-actions";
         if (canCopy) {
@@ -301,25 +351,41 @@
           copyBtn.type = "button";
           copyBtn.className = "ghost-btn";
           copyBtn.textContent = "复制";
-          if (image.is_compatibility_format) {
-            copyBtn.title = "该格式可能需要先转换为 PNG 才能复制；下载可保留原文件";
-          }
+          copyBtn.title = "复制上传副本：" + (image.upload_filename || image.filename || "");
           copyBtn.addEventListener("click", function () {
             copyImages([image]);
           });
           actions.appendChild(copyBtn);
         }
 
-        var downloadLink = document.createElement("a");
-        downloadLink.className = "ghost-btn";
-        downloadLink.href = image.url + (image.url.indexOf("?") >= 0 ? "&" : "?") + "download=1";
-        downloadLink.download = image.filename || "";
-        downloadLink.textContent = "下载";
-        downloadLink.addEventListener("click", function (event) {
-          event.preventDefault();
-          downloadOriginal(image);
-        });
-        actions.appendChild(downloadLink);
+        if (canDownload) {
+          var downloadLink = document.createElement("a");
+          downloadLink.className = "ghost-btn";
+          var sourceUrl = sourceSource(image);
+          downloadLink.href = sourceUrl + (sourceUrl.indexOf("?") >= 0 ? "&" : "?") + "download=1";
+          downloadLink.download = image.source_filename || image.filename || "";
+          downloadLink.textContent = "下载原图";
+          downloadLink.addEventListener("click", function (event) {
+            event.preventDefault();
+            downloadFile(sourceSource(image), image.source_filename || image.filename || "");
+          });
+          actions.appendChild(downloadLink);
+        }
+
+        if (image.upload_url && image.upload_sha256 &&
+            image.upload_sha256 !== image.source_sha256) {
+          var uploadLink = document.createElement("a");
+          uploadLink.className = "ghost-btn";
+          uploadLink.href = image.upload_url +
+            (image.upload_url.indexOf("?") >= 0 ? "&" : "?") + "download=1";
+          uploadLink.download = image.upload_filename || "";
+          uploadLink.textContent = "下载上传副本";
+          uploadLink.addEventListener("click", function (event) {
+            event.preventDefault();
+            downloadFile(image.upload_url, image.upload_filename || "");
+          });
+          actions.appendChild(uploadLink);
+        }
         card.appendChild(actions);
       }
 
@@ -329,33 +395,38 @@
     updateSelection();
   }
 
-  function downloadOriginal(image) {
-    if (!image.url) {
+  function downloadFile(url, name) {
+    if (!url) {
       toast("没有可下载的文件", true);
       return;
     }
-    var url = image.url + (image.url.indexOf("?") >= 0 ? "&" : "?") + "download=1";
+    var separator = url.indexOf("?") >= 0 ? "&" : "?";
     var frame = document.createElement("iframe");
     frame.style.display = "none";
-    frame.src = url;
+    frame.src = url + separator + "download=1";
     document.body.appendChild(frame);
     setTimeout(function () { frame.remove(); }, 60000);
-    toast("已开始下载");
+    toast("已开始下载" + (name ? "：" + name : ""));
+  }
+
+  function downloadOriginal(image) {
+    downloadFile(sourceSource(image), image.source_filename || image.filename || "");
   }
 
   function downloadZip() {
     var images = selectedImages();
     if (!images.length) {
-      toast("请先勾选要打包的图片，或点击「全选」", true);
+      toast("请先勾选有上传副本的图片，或点击「全选」", true);
       return;
     }
 
     var files = [];
     var seen = {};
     images.forEach(function (image) {
-      if (image.filename && !seen[image.filename]) {
-        seen[image.filename] = true;
-        files.push(image.filename);
+      var relative = image.upload_path || image.filename;
+      if (relative && !seen[relative]) {
+        seen[relative] = true;
+        files.push(relative);
       }
     });
     if (!files.length) {
@@ -401,7 +472,7 @@
   }
 
   function copySource(image) {
-    return image.preview_url || image.url;
+    return uploadSource(image);
   }
 
   function loadBlob(image) {
@@ -616,8 +687,10 @@
       var parts = [String(summary.occurrences || 0) + " 张图片"];
       if (summary.unique_media != null) { parts.push(summary.unique_media + " 个唯一文件"); }
       if (summary.duplicates) { parts.push(summary.duplicates + " 张重复"); }
-      if (summary.failed) { parts.push(summary.failed + " 张失败"); }
-      if (summary.compatibility) { parts.push(summary.compatibility + " 张兼容格式"); }
+      if (summary.converted) { parts.push(summary.converted + " 张已转 PNG"); }
+      if (summary.oversized) { parts.push(summary.oversized + " 张超限"); }
+      if (summary.conversion_failed) { parts.push(summary.conversion_failed + " 张转换失败"); }
+      if (summary.unsupported) { parts.push(summary.unsupported + " 张不支持"); }
       resultSummary.textContent = parts.join(" · ");
       manifestLink.href = data.manifest_url || "#";
 

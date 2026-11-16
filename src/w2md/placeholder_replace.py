@@ -126,6 +126,7 @@ class ReplacementResult:
     markdown: str
     replaced_count: int = 0
     skipped_code_count: int = 0
+    skipped_missing_count: int = 0
     errors: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
 
@@ -134,6 +135,7 @@ class ReplacementResult:
             "markdown": self.markdown,
             "replaced_count": self.replaced_count,
             "skipped_code_count": self.skipped_code_count,
+            "skipped_missing_count": self.skipped_missing_count,
             "errors": self.errors,
             "warnings": self.warnings,
         }
@@ -336,8 +338,20 @@ def analyze_replacement(markdown, showdoc_markdown, manifest=None, mapping=None)
     )
 
 
-def replace_placeholders(markdown, mapping, alt_by_placeholder=None, analysis=None):
-    """Replace placeholders outside code blocks using an explicit token map."""
+def replace_placeholders(
+    markdown,
+    mapping,
+    alt_by_placeholder=None,
+    analysis=None,
+    partial=False,
+):
+    """Replace placeholders outside code blocks using an explicit token map.
+
+    ``partial=True`` leaves tokens that are not present in ``mapping``
+    untouched instead of failing.  This is what the upload-result importer
+    needs: successful images become URLs, while failed / not-uploaded images
+    keep their placeholder for a later retry.
+    """
 
     mapping = _mapping_dict(mapping)
     alt_by_placeholder = alt_by_placeholder or {}
@@ -345,6 +359,7 @@ def replace_placeholders(markdown, mapping, alt_by_placeholder=None, analysis=No
     warnings = []
     replaced = 0
     skipped_code = 0
+    skipped_missing = 0
     output = []
 
     outside = _unique_placeholders(
@@ -354,6 +369,9 @@ def replace_placeholders(markdown, mapping, alt_by_placeholder=None, analysis=No
         token = item.placeholder
         url = mapping.get(token)
         if not url:
+            if partial:
+                skipped_missing += 1
+                continue
             errors.append("占位符 {0} 没有对应的 URL".format(token))
             continue
         url_error = _url_error(url)
@@ -378,7 +396,9 @@ def replace_placeholders(markdown, mapping, alt_by_placeholder=None, analysis=No
         skipped_code += len(PLACEHOLDER_TOKEN.findall(content)) - len(matches)
         for match in reversed(matches):
             token = content[match.start():match.end()]
-            url = mapping[token]
+            url = mapping.get(token)
+            if not url:
+                continue
             alt = alt_by_placeholder.get(token) or _fallback_alt(token)
             replacement = "![{0}]({1})".format(
                 _escape_alt(alt), _format_url(url)
@@ -400,6 +420,7 @@ def replace_placeholders(markdown, mapping, alt_by_placeholder=None, analysis=No
         markdown=final if not errors else markdown,
         replaced_count=replaced,
         skipped_code_count=skipped_code,
+        skipped_missing_count=skipped_missing,
         errors=errors,
         warnings=warnings,
     )

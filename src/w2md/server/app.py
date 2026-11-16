@@ -25,6 +25,15 @@ from ..placeholder_replace import (
     replace_placeholders,
     update_manifest,
 )
+from ..upload_result import (
+    analyze_upload_result,
+    apply_analysis as apply_upload_analysis,
+    build_missing_rows,
+    missing_images_csv,
+    missing_images_html,
+    output_names,
+    replacement_report,
+)
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -142,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) != 2:
             return self._send_json({"error": "bad asset path"}, 400)
         token, name = parts
-        name = unquote(name)
+        name = _asset_relative(unquote(name))
         job = _JOBS.get(token)
         if not job:
             job = self._recover_asset_job(token)
@@ -177,8 +186,14 @@ class Handler(BaseHTTPRequestHandler):
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.write(job["md_path"], job["stem"] + ".md")
             if job["assets_dir"].is_dir():
-                for file_path in sorted(job["assets_dir"].iterdir()):
-                    archive.write(file_path, job["assets_dir"].name + "/" + file_path.name)
+                for file_path in sorted(job["assets_dir"].rglob("*")):
+                    if not file_path.is_file():
+                        continue
+                    relative = file_path.relative_to(job["assets_dir"]).as_posix()
+                    archive.write(
+                        file_path,
+                        job["assets_dir"].name + "/" + relative,
+                    )
         data = buffer.getvalue()
         return self._send_bytes(
             data,
@@ -342,6 +357,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._analyze_placeholder_replace()
         if parsed.path == "/api/placeholder-replace/generate":
             return self._generate_placeholder_replace()
+        if parsed.path == "/api/upload-result/analyze":
+            return self._analyze_upload_result()
+        if parsed.path == "/api/upload-result/generate":
+            return self._generate_upload_result()
         if parsed.path != "/api/convert":
             return self._send_json({"error": "not found"}, 404)
 
@@ -373,6 +392,7 @@ class Handler(BaseHTTPRequestHandler):
                 out_dir,
                 config=Config(inline_style=styles, assets_mode=assets),
                 basename=stem,
+                source_name=filename,
             )
             if md_path is None:
                 return self._send_json({"error": "转换失败", "report": report.to_dict()}, 422)
@@ -393,19 +413,41 @@ class Handler(BaseHTTPRequestHandler):
                     local_path = entry.get("local_path")
                     if not local_path:
                         continue
-                    file_name = Path(local_path).name
-                    file_path = assets_dir / file_name
+                    relative = _asset_relative(local_path)
+                    file_path = assets_dir / relative
                     if not file_path.is_file():
                         continue
-                    images.append(
-                        {
-                            "path": local_path,
-                            "url": "/api/assets/{0}/{1}".format(token, file_name),
-                            "size": file_path.stat().st_size,
-                            "placeholder": entry.get("placeholder"),
-                            "alt": entry.get("alt_text"),
-                        }
-                    )
+                    source_path = entry.get("source_file")
+                    upload_path = entry.get("upload_file")
+                    image = {
+                        "sequence": entry.get("sequence"),
+                        "occurrence_id": entry.get("occurrence_id"),
+                        "path": local_path,
+                        "url": "/api/assets/{0}/{1}".format(token, quote(relative)),
+                        "size": entry.get("size") or file_path.stat().st_size,
+                        "placeholder": entry.get("placeholder"),
+                        "alt": entry.get("alt_text"),
+                        "compatibility": entry.get("compatibility"),
+                        "source_path": source_path,
+                        "upload_path": upload_path,
+                        "source_filename": Path(str(source_path)).name if source_path else None,
+                        "upload_filename": Path(str(upload_path)).name if upload_path else None,
+                        "source_url": (
+                            "/api/assets/{0}/{1}".format(
+                                token, quote(_asset_relative(source_path))
+                            )
+                            if source_path
+                            else None
+                        ),
+                        "upload_url": (
+                            "/api/assets/{0}/{1}".format(
+                                token, quote(_asset_relative(upload_path))
+                            )
+                            if upload_path
+                            else None
+                        ),
+                    }
+                    images.append(image)
             else:
                 assets_dir = out_dir / (stem + ".assets")
                 images = []
@@ -503,6 +545,148 @@ class Handler(BaseHTTPRequestHandler):
             }
         )
 
+    def _upload_payload(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return None, {"error": "请求格式错误"}
+        if not isinstance(payload.get("upload_result"), dict):
+            return None, {
+                "error": "缺少 upload_result.json。请先导出浏览器扩展的上传结果；"
+                "没有上传记录时不能生成最终 Markdown。"
+            }
+        if not str(payload.get("markdown") or "").strip():
+            return None, {"error": "缺少带占位符的 Markdown"}
+        manifest = payload.get("manifest")
+        if manifest is not None and not isinstance(manifest, dict):
+            return None, {"error": "manifest.json 格式错误"}
+        return payload, None
+
+    def _analyze_upload_result(self):
+        payload, error = self._upload_payload()
+        if error:
+            return self._send_json(error, 400)
+
+        analysis = analyze_upload_result(
+            payload.get("markdown") or "",
+            payload["upload_result"],
+            manifest=payload.get("manifest"),
+            mode=payload.get("mode") or "partial",
+            allow_mismatch=bool(payload.get("allow_mismatch")),
+        )
+        return self._send_json(analysis.to_dict())
+
+    def _generate_upload_result(self):
+        payload, error = self._upload_payload()
+        if error:
+            return self._send_json(error, 400)
+
+        analysis = analyze_upload_result(
+            payload.get("markdown") or "",
+            payload["upload_result"],
+            manifest=payload.get("manifest"),
+            mode=payload.get("mode") or "partial",
+            allow_mismatch=bool(payload.get("allow_mismatch")),
+        )
+        data = analysis.to_dict()
+
+        if not analysis.can_generate:
+            data["error"] = "校验未通过，未生成最终 Markdown"
+            return self._send_json(data, 422)
+
+        if analysis.requires_confirmation and not payload.get("confirmed"):
+            data["requires_confirmation"] = True
+            reasons = []
+            if any(
+                analysis.counts.get(key, 0)
+                for key in (
+                    "failed",
+                    "not_uploaded",
+                    "pending",
+                    "interrupted",
+                    "unmatched",
+                )
+            ):
+                reasons.append(
+                    "失败 {0}、未上传 {1}、待定/中断 {2}、无法匹配 {3}".format(
+                        analysis.counts.get("failed", 0),
+                        analysis.counts.get("not_uploaded", 0),
+                        analysis.counts.get("pending", 0)
+                        + analysis.counts.get("interrupted", 0),
+                        analysis.counts.get("unmatched", 0),
+                    )
+                )
+            if analysis.declared_differences:
+                reasons.append(
+                    "upload_result.json 统计差异 {0} 项".format(
+                        len(analysis.declared_differences)
+                    )
+                )
+            if analysis.counts.get("manifest_not_in_markdown") or analysis.counts.get(
+                "special_not_in_markdown"
+            ):
+                reasons.append("Markdown 缺少 manifest 占位符")
+            if analysis.unknown_placeholders or analysis.unknown_special_placeholders:
+                reasons.append("存在 manifest 之外的占位符")
+            data["error"] = "生成前仍有需要确认的差异：{0}。请确认后再生成。".format(
+                "；".join(reasons) or "部分成功模式"
+            )
+            return self._send_json(data, 409)
+
+        outcome = apply_upload_analysis(payload.get("markdown") or "", analysis)
+        data["analysis"] = analysis.to_dict()
+        thumbnails = payload.get("thumbnails")
+        if not isinstance(thumbnails, dict):
+            thumbnails = {}
+        names = output_names()
+        missing_rows = build_missing_rows(analysis)
+        report = replacement_report(
+            analysis,
+            outcome,
+            inputs={
+                "markdown": payload.get("markdown_name") or "",
+                "upload_result": payload.get("upload_result_name") or "",
+                "manifest": payload.get("manifest_name") or "",
+            },
+        )
+
+        data.update(
+            {
+                "markdown": outcome.markdown,
+                "replaced_count": outcome.replaced_count,
+                "skipped_code_count": outcome.skipped_code_count,
+                "skipped_missing_count": outcome.skipped_missing_count,
+                "remaining_placeholders": outcome.remaining_placeholders,
+                "post_errors": outcome.post_errors,
+                "warnings": outcome.warnings,
+                "ok": outcome.ok,
+                "missing_rows": missing_rows,
+                "artifacts": {
+                    "markdown": {
+                        "filename": names["markdown"],
+                        "content": outcome.markdown,
+                        "mime": "text/markdown;charset=utf-8",
+                    },
+                    "csv": {
+                        "filename": names["csv"],
+                        "content": missing_images_csv(missing_rows),
+                        "mime": "text/csv;charset=utf-8",
+                    },
+                    "report": {
+                        "filename": names["report"],
+                        "content": json.dumps(report, ensure_ascii=False, indent=2),
+                        "mime": "application/json;charset=utf-8",
+                    },
+                    "html": {
+                        "filename": names["html"],
+                        "content": missing_images_html(analysis, thumbnails=thumbnails),
+                        "mime": "text/html;charset=utf-8",
+                    },
+                },
+                "report": report,
+            }
+        )
+        return self._send_json(data)
+
     def _extract_word_images(self, parsed):
         query = parse_qs(parsed.query)
         filename = (query.get("filename") or ["upload.docx"])[0]
@@ -522,40 +706,82 @@ class Handler(BaseHTTPRequestHandler):
             out_dir = Path(tempfile.gettempdir()) / "quicktranser_word_images" / token
 
             with OpcPackage(tmp_path) as package:
-                result = extract_images_from_package(package, out_dir, stem=stem)
+                result = extract_images_from_package(
+                    package,
+                    out_dir,
+                    stem=stem,
+                    source_file=filename,
+                    markdown_file=stem + ".md",
+                )
 
             images = []
             for occurrence in result.occurrences:
+                source_url = (
+                    "/api/assets/{0}/{1}".format(
+                        token, quote(_asset_relative(occurrence.source_path))
+                    )
+                    if occurrence.source_path
+                    else None
+                )
+                upload_url = (
+                    "/api/assets/{0}/{1}".format(
+                        token, quote(_asset_relative(occurrence.upload_path))
+                    )
+                    if occurrence.upload_path
+                    else None
+                )
                 image = {
+                    "sequence": occurrence.order,
+                    "occurrence_id": occurrence.occurrence_id,
                     "placeholder": occurrence.placeholder,
                     "order": occurrence.order,
                     "relationship_id": occurrence.relationship_id,
                     "source_part": occurrence.source_part,
-                    "filename": Path(occurrence.local_path).name if occurrence.local_path else None,
-                    "url": None,
+                    "source_path": occurrence.source_path,
+                    "upload_path": occurrence.upload_path,
+                    "local_path": occurrence.local_path,
+                    "source_filename": occurrence.source_file_name,
+                    "upload_filename": occurrence.upload_file_name,
+                    "filename": occurrence.upload_file_name or occurrence.source_file_name,
+                    "file_name": occurrence.file_name,
+                    "local_file": occurrence.local_path,
+                    "section": occurrence.section,
+                    "context_before": occurrence.context_before,
+                    "context_after": occurrence.context_after,
+                    "source_url": source_url,
+                    "upload_url": upload_url,
+                    "url": upload_url or source_url,
                     "size": occurrence.size,
+                    "source_size": occurrence.source_size,
+                    "source_format": occurrence.source_extension.lstrip(".")
+                    if occurrence.source_extension
+                    else None,
+                    "upload_format": occurrence.upload_extension.lstrip(".")
+                    if occurrence.upload_extension
+                    else None,
                     "mime_type": occurrence.mime_type,
                     "extension": occurrence.extension,
+                    "source_sha256": occurrence.source_sha256,
+                    "upload_sha256": occurrence.upload_sha256,
                     "sha256": occurrence.sha256,
                     "sha256_verified": occurrence.sha256_verified,
+                    "compatibility": occurrence.compatibility,
+                    "compatibility_reason": occurrence.compatibility_reason,
+                    "requires_conversion": occurrence.requires_conversion,
+                    "source_width": occurrence.source_width,
+                    "source_height": occurrence.source_height,
+                    "upload_width": occurrence.upload_width,
+                    "upload_height": occurrence.upload_height,
                     "alt_text": occurrence.alt_text,
                     "alt_source": occurrence.alt_source,
                     "is_duplicate": occurrence.is_duplicate,
                     "duplicate_of": occurrence.duplicate_of,
                     "is_compatibility_format": occurrence.is_compatibility_format,
-                    "preview_url": None,
+                    "preview_url": upload_url if occurrence.preview_path else None,
                     "preview_status": occurrence.preview_status,
                     "status": occurrence.status,
                     "error": occurrence.error,
                 }
-                if occurrence.local_path:
-                    image["url"] = "/api/assets/{0}/{1}".format(
-                        token, Path(occurrence.local_path).name
-                    )
-                if occurrence.preview_path:
-                    image["preview_url"] = "/api/assets/{0}/{1}".format(
-                        token, Path(occurrence.preview_path).name
-                    )
                 images.append(image)
 
             _JOBS[token] = {"assets_dir": result.assets_dir, "stem": stem, "md_path": None}
@@ -641,11 +867,25 @@ class Handler(BaseHTTPRequestHandler):
             # the ZIP bytes identical to the extracted originals.
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as archive:
                 for raw_name in names:
-                    name = Path(str(raw_name)).name
+                    relative = str(raw_name).replace("\\", "/").strip().lstrip("/")
+                    name = Path(relative).name
                     if not name or name in seen:
                         continue
-                    asset_path = (base_dir / name).resolve()
-                    if base_dir not in asset_path.parents or not asset_path.is_file():
+                    candidates = [
+                        base_dir / relative,
+                        base_dir / "upload" / name,
+                        base_dir / "original" / name,
+                    ]
+                    asset_path = None
+                    for candidate in candidates:
+                        resolved = candidate.resolve()
+                        if (
+                            (base_dir == resolved or base_dir in resolved.parents)
+                            and resolved.is_file()
+                        ):
+                            asset_path = resolved
+                            break
+                    if asset_path is None:
                         continue
                     archive.write(asset_path, arcname=name)
                     seen.add(name)
@@ -867,6 +1107,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         return
+
+
+def _asset_relative(path):
+    """Convert a manifest path (``assets/upload/x.png``) to the asset root."""
+
+    text = str(path or "").replace("\\", "/").strip().lstrip("/")
+    if text.startswith("assets/"):
+        return text[len("assets/"):]
+    return text
 
 
 def _safe_stem(name):

@@ -52,7 +52,7 @@
         <div class="help-tip" id="asset-help-tip" role="tooltip">
           <span class="help-tip-item"><strong>文件夹</strong>：图片单独保存，Markdown 引用相对路径，源码短、便于编辑。</span>
           <span class="help-tip-item"><strong>内嵌</strong>：图片转成 Base64 直接写进 Markdown，一个文件即可带走，但源码会很长。</span>
-          <span class="help-tip-item"><strong>占位符</strong>：按正文顺序提取原图到 <code>assets/</code>，Markdown 写入 <code>{{SHOWDOC_IMAGE_000001}}</code> 形式的占位符，并生成 <code>manifest.json</code>（含 SHA-256），便于后续手工替换为 ShowDoc 图片地址。</span>
+          <span class="help-tip-item"><strong>占位符</strong>：按正文顺序把原图保存到 <code>assets/original/</code>，上传副本保存到 <code>assets/upload/</code>（EMF/WMF 自动转 PNG），Markdown 写入 <code>{{SHOWDOC_IMAGE_000001}}</code> 形式占位符，并生成含 SHA-256 和兼容性分类的 <code>manifest.json</code>。不支持/超限/转换失败的图片保留特殊占位符。</span>
         </div>
       </div>
     </div>
