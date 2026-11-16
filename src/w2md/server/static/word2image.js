@@ -412,14 +412,6 @@
     });
   }
 
-  function prefetchBlobs() {
-    state.images.forEach(function (image) {
-      if (image.url && image.status !== "failed") {
-        loadBlob(image).catch(function () {});
-      }
-    });
-  }
-
   function canvasToPng(bitmap) {
     var canvas = document.createElement("canvas");
     canvas.width = bitmap.width;
@@ -628,7 +620,6 @@
       populateFormatFilter();
       renderGallery();
       show(result);
-      prefetchBlobs();
     };
     xhr.onerror = function () {
       hide(statusPanel);
