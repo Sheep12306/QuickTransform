@@ -14,7 +14,7 @@
   var copySelectedBtn = document.getElementById("copy-selected");
   var downloadZipBtn = document.getElementById("download-zip");
   var resetBtn = document.getElementById("reset-btn");
-  var manifestLink = document.getElementById("manifest-link");
+  var downloadManifestBtn = document.getElementById("download-manifest");
   var toastEl = document.getElementById("toast");
   var lightbox = document.getElementById("lightbox");
   var lightboxImg = document.getElementById("lightbox-img");
@@ -27,6 +27,7 @@
     selected: {},
     blobs: {},
     formatFilter: "",
+    manifestUrl: "",
     toastTimer: null
   };
 
@@ -413,6 +414,14 @@
     downloadFile(sourceSource(image), image.source_filename || image.filename || "");
   }
 
+  function downloadManifest() {
+    if (!state.manifestUrl) {
+      toast("没有可下载的 manifest.json", true);
+      return;
+    }
+    downloadFile(state.manifestUrl, "manifest.json");
+  }
+
   function downloadZip() {
     var images = selectedImages();
     if (!images.length) {
@@ -681,6 +690,8 @@
       state.images = data.images || [];
       state.selected = {};
       state.blobs = {};
+      state.manifestUrl = data.manifest_url || "";
+      downloadManifestBtn.disabled = !state.manifestUrl;
 
       resultFile.textContent = state.filename;
       var summary = data.summary || {};
@@ -692,7 +703,6 @@
       if (summary.conversion_failed) { parts.push(summary.conversion_failed + " 张转换失败"); }
       if (summary.unsupported) { parts.push(summary.unsupported + " 张不支持"); }
       resultSummary.textContent = parts.join(" · ");
-      manifestLink.href = data.manifest_url || "#";
 
       populateFormatFilter();
       renderGallery();
@@ -713,12 +723,13 @@
     state.selected = {};
     state.blobs = {};
     state.formatFilter = "";
+    state.manifestUrl = "";
     formatFilter.value = "";
     formatFilter.disabled = true;
+    downloadManifestBtn.disabled = true;
     gallery.innerHTML = "";
     resultFile.textContent = "";
     resultSummary.textContent = "";
-    manifestLink.href = "#";
     hide(result);
     hide(statusPanel);
     show(dropPanel);
@@ -745,6 +756,7 @@
   });
 
   downloadZipBtn.addEventListener("click", downloadZip);
+  downloadManifestBtn.addEventListener("click", downloadManifest);
 
   resetBtn.addEventListener("click", reset);
   dropzone.addEventListener("click", function () { fileInput.click(); });

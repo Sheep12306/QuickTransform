@@ -84,6 +84,16 @@ class WordImageEndpointTest(unittest.TestCase):
                     manifest = json.loads(response.read().decode("utf-8"))
                 self.assertEqual(manifest["summary"]["occurrences"], 6)
 
+                with urllib.request.urlopen(
+                    base + body["manifest_url"] + "?download=1"
+                ) as response:
+                    self.assertIn(
+                        "attachment", response.headers.get("Content-Disposition", "")
+                    )
+                    self.assertIn(
+                        "manifest.json", response.headers.get("Content-Disposition", "")
+                    )
+
                 names = [image["filename"] for image in body["images"] if image["url"]][:3]
                 zip_request = urllib.request.Request(
                     base + "/api/word2image/zip",
