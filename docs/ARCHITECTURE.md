@@ -399,8 +399,9 @@ QuickTransform/
 │  ├─ config.py                配置加载与合并
 │  ├─ pipeline.py              编排：输入 → 解析 → 渲染 → 输出
 │  ├─ image_extract.py         按正文顺序提取图片、生成 manifest 与占位符
-│  ├─ placeholder_replace.py   旧模式：按 ShowDoc URL 顺序替换占位符
-│  ├─ upload_result.py         导入 upload_result.json，按 occurrence/upload_sha256 显式替换
+│  ├─ placeholder_replace.py   共享占位符扫描/替换工具（代码块跳过、显式 token 映射）
+│  ├─ upload_result.py         导入 upload_result.json，按 occurrence/upload_sha256 显式替换普通图片
+│  ├─ special_images.py        处理 unsupported/oversized/conversion_failed 特殊图片与最终残留检查
 │  ├─ report.py                转换报告收集与序列化
 │  │
 │  ├─ opc/                     OPC 容器层（只负责读包，不做语义判断）

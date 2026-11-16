@@ -20,10 +20,10 @@ from ..opc.package import OpcPackage
 from ..pdf_to_images import convert_pdf_to_images
 from ..pdf_to_word import convert_pdf_to_word
 from ..pipeline import convert
-from ..placeholder_replace import (
-    analyze_replacement,
-    replace_placeholders,
-    update_manifest,
+from ..special_images import (
+    analyze_special_images,
+    apply_special_images,
+    update_special_manifest,
 )
 from ..upload_result import (
     analyze_upload_result,
@@ -353,10 +353,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._extract_word_images(parsed)
         if parsed.path == "/api/word2image/zip":
             return self._zip_word_images()
-        if parsed.path == "/api/placeholder-replace/analyze":
-            return self._analyze_placeholder_replace()
-        if parsed.path == "/api/placeholder-replace/generate":
-            return self._generate_placeholder_replace()
+        if parsed.path == "/api/special-images/analyze":
+            return self._analyze_special_images()
+        if parsed.path == "/api/special-images/generate":
+            return self._generate_special_images()
         if parsed.path == "/api/upload-result/analyze":
             return self._analyze_upload_result()
         if parsed.path == "/api/upload-result/generate":
@@ -492,46 +492,55 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError):
             return None
 
-    def _analyze_placeholder_replace(self):
+    def _special_images_payload(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return None, {"error": "请求格式错误"}
+        if not str(payload.get("markdown") or "").strip():
+            return None, {"error": "缺少 Markdown 源码"}
+        manifest = payload.get("manifest")
+        if not isinstance(manifest, dict):
+            return None, {"error": "缺少 manifest.json。请选择图片提取生成的 manifest。"}
+        urls = payload.get("urls")
+        if urls is not None and not isinstance(urls, (dict, list)):
+            return None, {"error": "URL mapping 格式错误"}
+        return payload, None
+
+    def _analyze_special_images(self):
         payload = self._read_json_body()
         if payload is None:
             return self._send_json({"error": "请求格式错误"}, 400)
-        analysis = analyze_replacement(
+        analysis = analyze_special_images(
             payload.get("markdown") or "",
-            payload.get("showdoc_markdown") or "",
-            manifest=payload.get("manifest"),
-            mapping=payload.get("mapping"),
+            payload.get("manifest"),
+            urls=payload.get("urls"),
         )
         return self._send_json(analysis.to_dict())
 
-    def _generate_placeholder_replace(self):
-        payload = self._read_json_body()
-        if payload is None:
-            return self._send_json({"error": "请求格式错误"}, 400)
+    def _generate_special_images(self):
+        payload, error = self._special_images_payload()
+        if error:
+            return self._send_json(error, 400)
 
         markdown = payload.get("markdown") or ""
-        showdoc = payload.get("showdoc_markdown") or ""
-        manifest = payload.get("manifest")
-        analysis = analyze_replacement(
-            markdown,
-            showdoc,
-            manifest=manifest,
-            mapping=payload.get("mapping"),
-        )
+        manifest = payload["manifest"]
+        analysis = analyze_special_images(markdown, manifest, urls=payload.get("urls"))
         if not analysis.can_generate:
             data = analysis.to_dict()
-            data["error"] = "校验未通过，未生成最终 Markdown"
+            data["error"] = "检查未通过，未生成最终 Markdown"
             return self._send_json(data, 422)
 
         mapping = {
-            item.placeholder: item.url for item in analysis.mapping if item.url
+            item.placeholder: item.url
+            for item in analysis.items
+            if item.status == "matched" and item.url
         }
-        alt = {item.placeholder: item.alt_text for item in analysis.mapping}
-        result = replace_placeholders(markdown, mapping, alt, analysis)
+        alt = {item.placeholder: item.alt_text for item in analysis.items}
+        result = apply_special_images(markdown, mapping, alt)
         if result.errors:
             data = analysis.to_dict()
             data.update(result.to_dict())
-            data["error"] = "替换失败，未生成最终 Markdown"
+            data["error"] = "最终占位符残留检查未通过，未生成最终 Markdown"
             return self._send_json(data, 422)
 
         return self._send_json(
@@ -540,8 +549,11 @@ class Handler(BaseHTTPRequestHandler):
                 "markdown": result.markdown,
                 "replaced_count": result.replaced_count,
                 "skipped_code_count": result.skipped_code_count,
+                "final_check": result.final_check,
                 "warnings": result.warnings,
-                "updated_manifest": update_manifest(manifest, mapping),
+                "updated_manifest": update_special_manifest(
+                    manifest, mapping, analysis=analysis
+                ),
             }
         )
 

@@ -6,10 +6,10 @@ from pathlib import Path
 
 from .config import Config
 from .pipeline import convert
-from .placeholder_replace import (
-    analyze_replacement,
-    replace_placeholders,
-    update_manifest,
+from .special_images import (
+    analyze_special_images,
+    apply_special_images,
+    update_special_manifest,
 )
 
 
@@ -46,15 +46,19 @@ def build_parser():
     images.add_argument("--max-image-dimension", type=int, default=4000, help="max width/height before an image is treated as oversized (default: 4000)")
     images.add_argument("--preview-max-dimension", type=int, default=2000, help="max dimension for oversized preview upload copies (default: 2000)")
 
-    replace = sub.add_parser(
-        "replace-placeholders",
-        help="fill ShowDoc image URLs back into Markdown placeholders (legacy order mode)",
+    special = sub.add_parser(
+        "replace-special-images",
+        help="replace unsupported / oversized / conversion_failed placeholders with manual URLs",
     )
-    replace.add_argument("markdown", help="Markdown file containing placeholders")
-    replace.add_argument("--showdoc", required=True, help="ShowDoc Markdown source file")
-    replace.add_argument("-o", "--output", required=True, help="output directory")
-    replace.add_argument("--manifest", help="optional manifest.json from image extraction")
-    replace.add_argument("--mapping", help="optional JSON mapping: [{placeholder, url}]")
+    special.add_argument(
+        "markdown", help="Markdown file after upload-result filling (normal images already replaced)"
+    )
+    special.add_argument("--manifest", required=True, help="manifest.json from image extraction")
+    special.add_argument("-o", "--output", required=True, help="output directory")
+    special.add_argument(
+        "--urls",
+        help="JSON URL mapping: {placeholder: url} or [{placeholder, url}]",
+    )
 
     upload = sub.add_parser(
         "apply-upload-result",
@@ -151,8 +155,8 @@ def main(argv=None):
                         print("  {0}: {1}: {2}".format(warning.level, warning.kind, warning.detail))
                 else:
                     print("[error] {0} conversion failed".format(file_path.name))
-    elif args.command == "replace-placeholders":
-        return _run_replace(args)
+    elif args.command == "replace-special-images":
+        return _run_special_images(args)
     elif args.command == "apply-upload-result":
         return _run_apply_upload_result(args)
     elif args.command == "serve":
@@ -163,41 +167,68 @@ def main(argv=None):
     return 0
 
 
-def _run_replace(args):
+def _run_special_images(args):
     markdown_path = Path(args.markdown)
-    showdoc_path = Path(args.showdoc)
+    manifest_path = Path(args.manifest)
     if not markdown_path.is_file():
         print("[error] Markdown 文件不存在: {0}".format(markdown_path))
         return 1
-    if not showdoc_path.is_file():
-        print("[error] ShowDoc Markdown 文件不存在: {0}".format(showdoc_path))
+    if not manifest_path.is_file():
+        print("[error] manifest.json 不存在: {0}".format(manifest_path))
         return 1
 
     markdown = markdown_path.read_text(encoding="utf-8")
-    showdoc = showdoc_path.read_text(encoding="utf-8")
-    manifest = None
-    if args.manifest:
-        manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-    mapping = None
-    if args.mapping:
-        mapping = json.loads(Path(args.mapping).read_text(encoding="utf-8"))
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        print("[error] manifest.json 解析失败: {0}".format(error))
+        return 1
+    urls = None
+    if args.urls:
+        try:
+            urls = json.loads(Path(args.urls).read_text(encoding="utf-8"))
+        except ValueError as error:
+            print("[error] URL mapping 解析失败: {0}".format(error))
+            return 1
 
-    analysis = analyze_replacement(markdown, showdoc, manifest=manifest, mapping=mapping)
+    analysis = analyze_special_images(markdown, manifest, urls=urls)
+    counts = analysis.counts
+    print(
+        "特殊图片: manifest {0} / 特殊 {1} / 正文中 {2} / 已填 URL {3} / 待处理 {4}".format(
+            counts.get("manifest_images", 0),
+            counts.get("special_images", 0),
+            counts.get("in_markdown", 0),
+            counts.get("matched", 0),
+            counts.get("pending", 0),
+        )
+    )
+    print(
+        "检查: 普通占位符残留 {0} / URL 非法 {1} / occurrence_id 重复 {2} / "
+        "清单外占位符 {3}".format(
+            counts.get("normal_residue_occurrences", 0),
+            counts.get("invalid_url", 0),
+            counts.get("occurrence_id_duplicates", 0),
+            counts.get("unknown_placeholders", 0),
+        )
+    )
+    for warning in analysis.warnings:
+        print("  ! {0}".format(warning))
+    for error in analysis.errors:
+        print("  - {0}".format(error))
+
     if not analysis.can_generate:
-        print("[error] 校验未通过，未生成最终 Markdown")
-        for error in analysis.errors:
-            print("  - {0}".format(error))
-        for warning in analysis.warnings:
-            print("  ! {0}".format(warning))
+        print("[error] 检查未通过，未生成最终 Markdown")
         return 1
 
-    mapping_dict = {
-        item.placeholder: item.url for item in analysis.mapping if item.url
+    mapping = {
+        item.placeholder: item.url
+        for item in analysis.items
+        if item.status == "matched" and item.url
     }
-    alt = {item.placeholder: item.alt_text for item in analysis.mapping}
-    result = replace_placeholders(markdown, mapping_dict, alt, analysis)
+    alt = {item.placeholder: item.alt_text for item in analysis.items}
+    result = apply_special_images(markdown, mapping, alt)
     if result.errors:
-        print("[error] 替换失败")
+        print("[error] 最终占位符残留检查未通过")
         for error in result.errors:
             print("  - {0}".format(error))
         return 1
@@ -205,29 +236,31 @@ def _run_replace(args):
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
     stem = markdown_path.stem
-    md_path = output_dir / (stem + ".replaced.md")
+    md_path = output_dir / (stem + ".special.md")
     md_path.write_text(result.markdown, encoding="utf-8")
 
-    manifest_path = None
-    if manifest is not None:
-        manifest_path = output_dir / (stem + ".manifest.replaced.json")
-        manifest_path.write_text(
-            json.dumps(update_manifest(manifest, mapping_dict), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+    manifest_out = output_dir / (stem + ".manifest.special.json")
+    manifest_out.write_text(
+        json.dumps(
+            update_special_manifest(manifest, mapping, analysis=analysis),
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     report = {
         "source": str(markdown_path),
-        "showdoc_source": str(showdoc_path),
+        "manifest": str(manifest_path),
         "analysis": analysis.to_dict(),
         "replacement": {
             "replaced_count": result.replaced_count,
             "skipped_code_count": result.skipped_code_count,
-            "errors": result.errors,
+            "final_check": result.final_check,
             "warnings": result.warnings,
         },
     }
-    report_path = output_dir / (stem + ".replace.report.json")
+    report_path = output_dir / (stem + ".special.report.json")
     report_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -235,8 +268,8 @@ def _run_replace(args):
     print("[ok] {0} -> {1}".format(markdown_path.name, md_path))
     print("  replaced: {0}".format(result.replaced_count))
     print("  skipped in code: {0}".format(result.skipped_code_count))
-    if manifest_path is not None:
-        print("  manifest: {0}".format(manifest_path))
+    print("  final check: {0}".format("passed" if result.final_check.get("passed") else "failed"))
+    print("  manifest: {0}".format(manifest_out))
     print("  report: {0}".format(report_path))
     for warning in analysis.warnings + result.warnings:
         print("  ! {0}".format(warning))

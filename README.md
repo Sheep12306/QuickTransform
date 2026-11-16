@@ -2,7 +2,7 @@
 
 Word（.docx）转 Markdown 的本地工具，面向进销存产品文档。
 
-当前进度：M0 骨架 + 本地网页界面。已支持段落、标题（样式的大纲级别与名称匹配）、加粗/斜体行内格式、转换报告、按正文顺序提取 Word 图片、图片兼容性预检（EMF/WMF/TIFF 转 PNG、超大 PNG 生成预览）、生成 manifest，以及导入浏览器扩展的上传记录、只替换成功图片并输出缺失清单。
+当前进度：M0 骨架 + 本地网页界面。已支持段落、标题（样式的大纲级别与名称匹配）、加粗/斜体行内格式、转换报告、按正文顺序提取 Word 图片、图片兼容性预检（EMF/WMF/TIFF 转 PNG、超大 PNG 生成预览）、生成 manifest，导入浏览器扩展的上传记录、只替换成功图片并输出缺失清单，以及特殊图片人工 URL 回填与最终占位符残留检查。
 
 ## 运行
 
@@ -45,21 +45,21 @@ http://127.0.0.1:8000/word2image.html
 
 图片模块说明见 [docs/IMAGE_EXTRACTION.md](docs/IMAGE_EXTRACTION.md)。
 
-## 占位替换工具（旧模式）
+## 特殊图片处理与检查
 
-把 ShowDoc 返回的图片 URL 按顺序填回 Markdown 占位符：
+只处理「上传结果导入」自动回填后残留的 `unsupported` / `oversized` / `conversion_failed` 特殊图片。左侧显示 Markdown，右侧显示 manifest 解析出的特殊图片清单；点击条目可定位并高亮对应占位符，每项独立填写 ShowDoc URL：
 
 ```text
-http://127.0.0.1:8000/placeholder_replace.html
+http://127.0.0.1:8000/special_images.html
 ```
 
-支持数量校验、映射确认、手动调整、代码块跳过、新文件输出和 manifest 更新。命令行：
+页面检查普通占位符残留、特殊图片待处理数量、URL 有效性、`occurrence_id` 唯一性和最终占位符残留。输入为 Markdown + `manifest.json`，不接受 `upload_result.json`；普通图片统一由「上传结果导入」处理。命令行：
 
 ```powershell
-.tools\python312\python.exe -m w2md replace-placeholders output\文档.md --showdoc showdoc.md -o output --manifest output\assets\manifest.json
+.tools\python312\python.exe -m w2md replace-special-images output\文档.md --manifest output\assets\manifest.json --urls special_urls.json -o output\final
 ```
 
-详细说明见 [docs/PLACEHOLDER_REPLACE.md](docs/PLACEHOLDER_REPLACE.md)。
+详细说明见 [docs/SPECIAL_IMAGES.md](docs/SPECIAL_IMAGES.md)。
 
 ## 上传结果导入（推荐）
 

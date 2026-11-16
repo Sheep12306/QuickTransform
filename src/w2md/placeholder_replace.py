@@ -1,31 +1,22 @@
-"""Fill ShowDoc image URLs back into Markdown image placeholders.
+"""Shared Markdown placeholder scanning and replacement helpers.
 
-The generated Markdown contains tokens such as ``{{SHOWDOC_IMAGE_000001}}``.
-After a human pastes the images into ShowDoc, ShowDoc returns Markdown image
-links.  This module validates the three counts (placeholders, extracted images,
-ShowDoc URLs), builds an explicit placeholder -> URL mapping, and replaces only
-the placeholders that are outside Markdown code blocks.
+``upload_result`` uses :func:`replace_placeholders` to fill *normal* image
+placeholders after uploads succeed.  ``special_images`` uses the scanning
+helpers and replaces only ``unsupported`` / ``oversized`` /
+``conversion_failed`` tokens.  Neither workflow replaces by "the Nth URL";
+callers always pass an explicit token -> URL mapping.
 
-It never modifies the input files; callers write a new Markdown file and an
-updated manifest.
+Placeholders inside fenced / indented / inline code are never replaced.
 """
 
 from __future__ import annotations
 
-import copy
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 PLACEHOLDER_TOKEN = re.compile(r"\{\{SHOWDOC_IMAGE_[A-Z0-9_]+\}\}")
 PLACEHOLDER_DIGITS = re.compile(r"(\d+)\}\}$")
-IMAGE_LINK = re.compile(
-    r"!\[([^\]]*)\]\((?![<])([^)\s]+)(?:\s+[\"'][^\"']*[\"'])?\)"
-)
-IMAGE_LINK_ANGLE = re.compile(
-    r"!\[([^\]]*)\]\(<([^>\s]+)>(?:\s+[\"'][^\"']*[\"'])?\)"
-)
 DATA_IMAGE = re.compile(r"data:image/", re.IGNORECASE)
 FENCE = re.compile(r"^(\s{0,3})(`{3,}|~{3,})(.*)$")
 LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
@@ -46,78 +37,6 @@ class PlaceholderOccurrence:
             "line": self.line,
             "column": self.column,
             "in_code": self.in_code,
-        }
-
-
-@dataclass
-class UrlItem:
-    index: int
-    url: str
-    alt: str = ""
-    line: int = 0
-    valid: bool = True
-    error: str | None = None
-
-    def to_dict(self):
-        return {
-            "index": self.index,
-            "url": self.url,
-            "alt": self.alt,
-            "line": self.line,
-            "valid": self.valid,
-            "error": self.error,
-        }
-
-
-@dataclass
-class MappingItem:
-    placeholder: str
-    order: int
-    url: str | None
-    alt_text: str
-    local_path: str | None = None
-    filename: str | None = None
-    status: str = "pending"
-    error: str | None = None
-
-    def to_dict(self):
-        return {
-            "placeholder": self.placeholder,
-            "order": self.order,
-            "url": self.url,
-            "alt_text": self.alt_text,
-            "local_path": self.local_path,
-            "filename": self.filename,
-            "status": self.status,
-            "error": self.error,
-        }
-
-
-@dataclass
-class AnalysisResult:
-    placeholders: list = field(default_factory=list)
-    urls: list = field(default_factory=list)
-    mapping: list = field(default_factory=list)
-    counts: dict = field(default_factory=dict)
-    errors: list = field(default_factory=list)
-    warnings: list = field(default_factory=list)
-    code_block_placeholders: list = field(default_factory=list)
-    can_generate: bool = False
-    manifest_provided: bool = False
-
-    def to_dict(self):
-        return {
-            "placeholders": [item.to_dict() for item in self.placeholders],
-            "urls": [item.to_dict() for item in self.urls],
-            "mapping": [item.to_dict() for item in self.mapping],
-            "counts": self.counts,
-            "errors": self.errors,
-            "warnings": self.warnings,
-            "code_block_placeholders": [
-                item.to_dict() for item in self.code_block_placeholders
-            ],
-            "can_generate": self.can_generate,
-            "manifest_provided": self.manifest_provided,
         }
 
 
@@ -162,180 +81,6 @@ def list_placeholders(markdown):
                 )
             )
     return occurrences
-
-
-def extract_image_urls(showdoc_markdown):
-    """Extract Markdown image URLs in source order, skipping code blocks."""
-
-    urls = []
-    for line_number, (content, _ending, is_code) in enumerate(
-        _scan_lines(showdoc_markdown), start=1
-    ):
-        if is_code:
-            continue
-        masked = _mask_inline_code(content)
-        for match in _iter_image_links(masked):
-            url = match.group(2)
-            error = _url_error(url)
-            urls.append(
-                UrlItem(
-                    index=len(urls) + 1,
-                    url=url,
-                    alt=match.group(1).strip(),
-                    line=line_number,
-                    valid=error is None,
-                    error=error,
-                )
-            )
-    return urls
-
-
-def analyze_replacement(markdown, showdoc_markdown, manifest=None, mapping=None):
-    """Validate counts and build the default or manually supplied mapping."""
-
-    occurrences = list_placeholders(markdown)
-    outside = [item for item in occurrences if not item.in_code]
-    code_items = [item for item in occurrences if item.in_code]
-    unique = _unique_placeholders(outside)
-    urls = extract_image_urls(showdoc_markdown)
-    manifest_entries = _manifest_entries(manifest)
-    manifest_provided = bool(manifest_entries)
-
-    explicit = _explicit_mapping(mapping)
-    default_urls = [item.url for item in urls]
-    mapping_items = []
-    used_urls = set()
-    errors = []
-    warnings = []
-
-    if not unique:
-        errors.append("没有检测到可替换的占位符")
-    if not urls:
-        errors.append("没有检测到 ShowDoc 图片 URL")
-
-    if code_items:
-        warnings.append(
-            "代码块中有 {0} 个占位符，已跳过，不会参与替换".format(len(code_items))
-        )
-    if len(unique) < len(outside):
-        warnings.append(
-            "Markdown 中有 {0} 个占位符出现位置，但只有 {1} 个唯一占位符；"
-            "重复占位符会共用同一 URL".format(len(outside), len(unique))
-        )
-
-    for index, occurrence in enumerate(unique):
-        entry = _manifest_entry_for(manifest_entries, occurrence.placeholder, occurrence.order)
-        alt_text = (entry or {}).get("alt_text") or "图片{0}".format(occurrence.order)
-        local_path = (entry or {}).get("local_path")
-        filename = Path(local_path).name if local_path else None
-
-        if explicit is not None:
-            url = explicit.get(occurrence.placeholder)
-            source = "manual"
-        else:
-            url = default_urls[index] if index < len(default_urls) else None
-            source = "order"
-
-        status = "matched"
-        error = None
-        if not url:
-            status = "missing_url"
-            error = "没有为 {0} 分配 ShowDoc URL".format(occurrence.placeholder)
-        else:
-            url_error = _url_error(url)
-            if url_error:
-                status = "invalid_url"
-                error = url_error
-            elif source == "manual" and url not in default_urls:
-                warnings.append(
-                    "{0} 使用了 ShowDoc 源码之外的 URL：{1}".format(
-                        occurrence.placeholder, url
-                    )
-                )
-            used_urls.add(url)
-
-        mapping_items.append(
-            MappingItem(
-                placeholder=occurrence.placeholder,
-                order=occurrence.order,
-                url=url,
-                alt_text=alt_text,
-                local_path=local_path,
-                filename=filename,
-                status=status,
-                error=error,
-            )
-        )
-
-    missing = [item for item in mapping_items if not item.url]
-    invalid = [item for item in mapping_items if item.status == "invalid_url"]
-    if missing:
-        errors.append(
-            "缺少 URL 的占位符：{0}".format("、".join(item.placeholder for item in missing))
-        )
-    if invalid:
-        errors.append(
-            "URL 非法的占位符：{0}".format("、".join(item.placeholder for item in invalid))
-        )
-
-    if len(unique) != len(urls):
-        errors.append(
-            "数量不一致：Markdown 有 {0} 个可替换占位符，ShowDoc 源码检测到 {1} 个图片 URL".format(
-                len(unique), len(urls)
-            )
-        )
-        if len(urls) > len(unique):
-            extra = urls[len(unique):]
-            errors.append(
-                "多余 URL：{0}".format(
-                    "、".join("第{0}个 {1}".format(item.index, item.url) for item in extra)
-                )
-            )
-        elif len(unique) > len(urls):
-            missing_tokens = [item.placeholder for item in unique[len(urls):]]
-            errors.append("缺少 URL 的占位符：{0}".format("、".join(missing_tokens)))
-
-    if manifest_entries and len(manifest_entries) != len(unique):
-        errors.append(
-            "manifest 有 {0} 张图片，Markdown 有 {1} 个唯一占位符，数量不一致".format(
-                len(manifest_entries), len(unique)
-            )
-        )
-
-    if not manifest_provided:
-        warnings.append("未提供 manifest，缩略图、原 alt 文本和 manifest 更新不可用")
-
-    if DATA_IMAGE.search(markdown) or DATA_IMAGE.search(showdoc_markdown):
-        errors.append("输入内容包含 data:image Base64，最终 Markdown 不允许包含 Base64 图片")
-
-    unused = [item.url for item in urls if item.url not in used_urls]
-    if unused:
-        warnings.append("有 {0} 个 ShowDoc URL 未被映射使用".format(len(unused)))
-
-    errors = _dedupe(errors)
-    warnings = _dedupe(warnings)
-    can_generate = not errors and all(item.status == "matched" for item in mapping_items)
-
-    return AnalysisResult(
-        placeholders=outside,
-        urls=urls,
-        mapping=mapping_items,
-        counts={
-            "placeholder_occurrences": len(outside),
-            "placeholders": len(unique),
-            "code_block_placeholders": len(code_items),
-            "urls": len(urls),
-            "manifest_images": len(manifest_entries),
-            "matched": sum(1 for item in mapping_items if item.status == "matched"),
-            "missing": len(missing),
-            "invalid": len(invalid),
-        },
-        errors=errors,
-        warnings=warnings,
-        code_block_placeholders=code_items,
-        can_generate=can_generate,
-        manifest_provided=manifest_provided,
-    )
 
 
 def replace_placeholders(
@@ -424,42 +169,6 @@ def replace_placeholders(
         errors=errors,
         warnings=warnings,
     )
-
-
-def update_manifest(manifest, mapping):
-    """Return a copy of the manifest with final URLs and replacement status."""
-
-    if not isinstance(manifest, dict):
-        return None
-    updated = copy.deepcopy(manifest)
-    mapping = _mapping_dict(mapping)
-    images = updated.get("images")
-    if not isinstance(images, list):
-        return updated
-
-    matched = 0
-    missing = 0
-    for entry in images:
-        if not isinstance(entry, dict):
-            continue
-        token = entry.get("placeholder")
-        url = mapping.get(token)
-        if url:
-            entry["showdoc_url"] = url
-            entry["upload_status"] = "url_received"
-            entry["replacement_status"] = "replaced"
-            matched += 1
-        else:
-            entry["showdoc_url"] = None
-            entry["replacement_status"] = "pending"
-            missing += 1
-
-    updated["replacement"] = {
-        "matched": matched,
-        "missing": missing,
-        "total": len(images),
-    }
-    return updated
 
 
 def _scan_lines(text):
@@ -577,27 +286,6 @@ def _mask_inline_code(line):
     return "".join(chars)
 
 
-def _iter_image_links(line):
-    seen = set()
-    for match in IMAGE_LINK.finditer(line):
-        seen.add(match.start())
-        yield match
-    for match in IMAGE_LINK_ANGLE.finditer(line):
-        if match.start() not in seen:
-            yield match
-
-
-def _dedupe(items):
-    result = []
-    seen = set()
-    for item in items:
-        if item in seen:
-            continue
-        seen.add(item)
-        result.append(item)
-    return result
-
-
 def _unique_placeholders(occurrences):
     result = []
     seen = set()
@@ -634,27 +322,10 @@ def _url_error(url):
         return "URL 为空"
     if url.lower().startswith("data:"):
         return "不允许使用 data:image Base64 URL"
-    if not url.startswith(("http://", "https://")):
+    if not url.lower().startswith(("http://", "https://")):
         return "URL 必须以 http:// 或 https:// 开头"
     if re.search(r"\s", url):
         return "URL 不能包含空白字符"
-    return None
-
-
-def _manifest_entries(manifest):
-    if not isinstance(manifest, dict):
-        return []
-    images = manifest.get("images")
-    return images if isinstance(images, list) else []
-
-
-def _manifest_entry_for(entries, placeholder, order):
-    for entry in entries:
-        if isinstance(entry, dict) and entry.get("placeholder") == placeholder:
-            return entry
-    for entry in entries:
-        if isinstance(entry, dict) and entry.get("order") == order:
-            return entry
     return None
 
 

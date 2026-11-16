@@ -161,6 +161,8 @@ output/final/
 
 工具只替换当前 Markdown 中仍存在的普通占位符；已经成功的图片不会重新上传，也不会被修改；特殊占位符继续保持不动。
 
+普通图片补齐后，如果仍有 `unsupported` / `oversized` / `conversion_failed` 特殊占位符，请转到 [特殊图片处理与检查](SPECIAL_IMAGES.md) 逐张填写 URL。
+
 ## oversized 图片的行为
 
 `oversized` 图片会生成预览上传副本（优先 PNG，必要时 JPEG），manifest 中记录 `upload_file` 和 `upload_sha256`，但按约定保留 `{{SHOWDOC_OVERSIZED_IMAGE_...}}` 特殊占位符，不进入自动替换流程。
@@ -176,4 +178,4 @@ output/final/
 - `section` / `context_before` / `context_after` 是尽力而为的定位信息；文本框、嵌套结构中的图片可能无法准确取到上下文。
 - `missing_images.html` 只对浏览器能解码的图片生成缩略图；EMF、WMF 等格式下载原文件后人工查看。
 - 如果用户手工修改了 Markdown 中的占位符，修改后的占位符会被列为“不在 manifest 内”，对应原图会被列为“Markdown 中缺少占位符”，工具不会擅自补回。
-- 特殊占位符（unsupported / oversized / conversion_failed）不会自动替换，即使图片已人工上传。
+- 特殊占位符（unsupported / oversized / conversion_failed）不会自动替换，即使图片已人工上传；请使用 [特殊图片处理与检查](SPECIAL_IMAGES.md) 手工填写 URL。

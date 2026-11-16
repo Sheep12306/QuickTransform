@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>特殊图片处理与检查 - QuickTransform</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="word2image.css">
+  <link rel="stylesheet" href="placeholder_replace.css">
+  <link rel="stylesheet" href="special_images.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">W→★</span>
+      <div class="brand-text">
+        <h1>QuickTransform</h1>
+        <p>特殊图片处理</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="home-link" href="/">返回首页</a>
+      <div class="topbar-status">本地运行 · 只处理特殊图片</div>
+    </div>
+  </header>
+
+  <main class="layout replace-layout special-layout">
+    <section class="image-hero">
+      <h2>特殊图片处理与检查</h2>
+      <p>只处理自动回填后残留的 <code>{{SHOWDOC_UNSUPPORTED_IMAGE_…}}</code>、
+        <code>{{SHOWDOC_OVERSIZED_IMAGE_…}}</code>、<code>{{SHOWDOC_CONVERSION_FAILED_IMAGE_…}}</code>。
+        普通图片请先使用「上传结果导入」完成回填，本页面不会替换普通占位符。</p>
+    </section>
+
+    <div class="special-workspace">
+      <section class="special-pane md-pane is-drop-target" id="markdown-card" data-drop-input="markdown-file">
+        <header class="special-pane-head">
+          <div>
+            <h3>Markdown 源码</h3>
+            <span id="md-stats">拖入 .md 文件，或直接粘贴源码</span>
+          </div>
+          <div class="pane-tools">
+            <label class="file-pick">
+              选择 .md
+              <input type="file" id="markdown-file" accept=".md,.markdown,text/plain" hidden>
+            </label>
+          </div>
+        </header>
+        <textarea id="markdown-text" spellcheck="false"
+          placeholder="拖拽 .md 文件到这里，或粘贴包含特殊占位符的 Markdown"></textarea>
+        <p class="input-name" id="markdown-name"></p>
+      </section>
+
+      <section class="special-pane list-pane is-drop-target" id="manifest-card" data-drop-input="manifest-file">
+        <header class="special-pane-head">
+          <div>
+            <h3>特殊图片清单</h3>
+            <span id="manifest-name">拖入 manifest.json 后显示特殊图片</span>
+          </div>
+          <div class="pane-tools">
+            <label class="file-pick">
+              选择 manifest.json
+              <input type="file" id="manifest-file" accept=".json,application/json" hidden>
+            </label>
+          </div>
+        </header>
+        <div class="special-summary" id="special-summary">
+          <span>共 <b id="count-special">0</b> 张特殊图片</span>
+          <span>正文中 <b id="count-in-markdown">0</b> 张</span>
+          <span>待处理 <b id="count-pending">0</b> 张</span>
+        </div>
+        <div class="special-list" id="special-list">
+          <p class="empty-hint">选择 manifest.json 后，这里会列出 unsupported / oversized / conversion_failed 图片。</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="replace-actions">
+      <button class="quick-btn" id="analyze-btn" type="button">重新检查</button>
+      <button class="quick-btn" id="generate-btn" type="button" disabled>生成最终 Markdown</button>
+      <button class="ghost-btn" id="clear-btn" type="button">清空</button>
+    </div>
+
+    <section class="analysis-panel" id="checks-panel">
+      <div class="check-grid">
+        <div class="check-item idle" id="check-normal">
+          <span class="check-name">普通占位符残留</span>
+          <b class="check-value" id="check-normal-value">—</b>
+          <span class="check-state" id="check-normal-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-pending">
+          <span class="check-name">特殊图片待处理</span>
+          <b class="check-value" id="check-pending-value">—</b>
+          <span class="check-state" id="check-pending-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-url">
+          <span class="check-name">URL 有效性</span>
+          <b class="check-value" id="check-url-value">—</b>
+          <span class="check-state" id="check-url-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-occurrence">
+          <span class="check-name">occurrence_id 唯一性</span>
+          <b class="check-value" id="check-occurrence-value">—</b>
+          <span class="check-state" id="check-occurrence-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-unknown">
+          <span class="check-name">清单外特殊占位符</span>
+          <b class="check-value" id="check-unknown-value">—</b>
+          <span class="check-state" id="check-unknown-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-final">
+          <span class="check-name">最终占位符残留</span>
+          <b class="check-value" id="check-final-value">—</b>
+          <span class="check-state" id="check-final-state">生成后检查</span>
+        </div>
+      </div>
+      <ul class="message-list error-list hidden" id="error-list"></ul>
+      <ul class="message-list warning-list hidden" id="warning-list"></ul>
+    </section>
+
+    <section class="result-panel hidden" id="result-panel">
+      <div class="panel-head">
+        <h3>最终 Markdown</h3>
+        <div class="result-actions">
+          <button class="ghost-btn" id="copy-result" type="button">复制</button>
+          <button class="ghost-btn" id="download-md" type="button">下载 .md</button>
+          <button class="ghost-btn" id="download-manifest" type="button">下载 manifest</button>
+          <button class="ghost-btn" id="download-report" type="button">下载报告</button>
+        </div>
+      </div>
+      <textarea id="result-text" readonly spellcheck="false"></textarea>
+      <p class="result-note" id="result-note"></p>
+    </section>
+  </main>
+
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="api.js"></script>
+  <script src="file_drop.js"></script>
+  <script src="special_images.js"></script>
+</body>
+</html>

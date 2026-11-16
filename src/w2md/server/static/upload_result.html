@@ -32,23 +32,23 @@
     </section>
 
     <section class="replace-inputs">
-      <article class="input-card">
+      <article class="input-card is-drop-target" id="markdown-card" data-drop-input="markdown-file">
         <header class="input-head">
           <h3>1. 带占位符的 Markdown</h3>
           <label class="file-pick">
-            选择 .md
+            选择 / 拖入 .md
             <input type="file" id="markdown-file" accept=".md,.markdown,text/plain" hidden>
           </label>
         </header>
-        <textarea id="markdown-text" spellcheck="false" placeholder="粘贴包含 {{SHOWDOC_IMAGE_000001}} 的 Markdown"></textarea>
+        <textarea id="markdown-text" spellcheck="false" placeholder="拖入 .md 文件，或粘贴包含 {{SHOWDOC_IMAGE_000001}} 的 Markdown"></textarea>
         <p class="input-name" id="markdown-name"></p>
       </article>
 
-      <article class="input-card">
+      <article class="input-card is-drop-target" id="upload-card" data-drop-input="upload-file">
         <header class="input-head">
           <h3>2. upload_result.json</h3>
           <label class="file-pick">
-            选择 .json
+            选择 / 拖入 .json
             <input type="file" id="upload-file" accept=".json,application/json" hidden>
           </label>
         </header>
@@ -61,13 +61,13 @@
     </section>
 
     <section class="replace-optional">
-      <label class="file-pick">
-        上传 manifest.json
+      <label class="file-pick is-drop-target" data-drop-input="manifest-file">
+        上传 manifest.json（可拖入）
         <input type="file" id="manifest-file" accept=".json,application/json" hidden>
       </label>
       <span class="optional-name" id="manifest-name">未上传 manifest（无法交叉校验与生成完整缺失清单）</span>
-      <label class="file-pick">
-        选择原图（可选）
+      <label class="file-pick is-drop-target" data-drop-input="image-files">
+        选择原图（可选，可拖入）
         <input type="file" id="image-files" accept="image/*,.emf,.wmf,.tif,.tiff" multiple hidden>
       </label>
       <span class="optional-name" id="image-count">未选择图片，缺失清单没有缩略图</span>
@@ -169,6 +169,7 @@
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
   <script src="api.js"></script>
+  <script src="file_drop.js"></script>
   <script src="upload_result.js"></script>
 </body>
 </html>
