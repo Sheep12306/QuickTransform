@@ -387,7 +387,11 @@
       frame.src = data.download_url;
       document.body.appendChild(frame);
       setTimeout(function () { frame.remove(); }, 120000);
-      toast("已打包 " + (data.count || files.length) + " 张图片，开始下载…");
+      var sizeText = data.size ? "（" + formatBytes(data.size) + "）" : "";
+      toast(
+        "已打包 " + (data.count || files.length) + " 张图片" +
+        sizeText + "，开始下载…"
+      );
     }).catch(function (error) {
       toast("打包失败：" + (error.message || error), true);
     }).then(function () {
