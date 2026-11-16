@@ -3,6 +3,7 @@
 import io
 import json
 import re
+import shutil
 import tempfile
 import time
 import uuid
@@ -53,6 +54,7 @@ MIME = {
 }
 
 _JOBS = {}
+_WORD2IMAGE_ZIPS = {}
 _PDF_IMAGE_JOBS = {}
 _PDF_WORD_JOBS = {}
 _EXCEL_JOBS = {}
@@ -84,6 +86,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
+        if path.startswith("/api/word2image/zip-download/"):
+            return self._serve_word_zip(path)
         if path.startswith("/api/assets/"):
             return self._serve_asset(path, parsed.query)
         if path.startswith("/api/download/"):
@@ -572,6 +576,39 @@ class Handler(BaseHTTPRequestHandler):
             if tmp_path is not None:
                 tmp_path.unlink(missing_ok=True)
 
+    def _serve_word_zip(self, path):
+        token = path.rsplit("/", 1)[-1]
+        job = _WORD2IMAGE_ZIPS.pop(token, None)
+        if not job:
+            return self._send_json({"error": "下载链接已过期，请重新打包"}, 404)
+        zip_path = Path(job["path"])
+        try:
+            if not zip_path.is_file():
+                return self._send_json({"error": "打包文件不存在"}, 404)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(zip_path.stat().st_size))
+            self.send_header(
+                "Content-Disposition",
+                "attachment; filename*=UTF-8''{0}".format(quote(job["name"])),
+            )
+            self.end_headers()
+            with zip_path.open("rb") as handle:
+                shutil.copyfileobj(handle, self.wfile, 1024 * 1024)
+        finally:
+            zip_path.unlink(missing_ok=True)
+
+    def _cleanup_word_zips(self):
+        cutoff = time.time() - 3600
+        for token, job in list(_WORD2IMAGE_ZIPS.items()):
+            if job.get("created", 0) >= cutoff:
+                continue
+            _WORD2IMAGE_ZIPS.pop(token, None)
+            try:
+                Path(job["path"]).unlink(missing_ok=True)
+            except OSError:
+                pass
+
     def _zip_word_images(self):
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length)
@@ -583,36 +620,61 @@ class Handler(BaseHTTPRequestHandler):
         token = payload.get("token")
         names = payload.get("files") or []
         job = _JOBS.get(token)
+        if not job:
+            job = self._recover_asset_job(token)
+            if job:
+                _JOBS[token] = job
         if not job or not job.get("assets_dir"):
             return self._send_json({"error": "任务已过期，请重新提取"}, 404)
 
         base_dir = Path(job["assets_dir"]).resolve()
-        buffer = io.BytesIO()
+        zip_name = Path(str(payload.get("zip_name") or "word-images.zip")).name
+        temp_zip = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+        temp_zip.close()
+        zip_path = Path(temp_zip.name)
         added = 0
         seen = set()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-            for raw_name in names:
-                name = Path(str(raw_name)).name
-                if not name or name in seen:
-                    continue
-                asset_path = (base_dir / name).resolve()
-                if base_dir not in asset_path.parents or not asset_path.is_file():
-                    continue
-                archive.write(asset_path, arcname=name)
-                seen.add(name)
-                added += 1
+        stored = False
+        try:
+            # Images are already compressed. Storing them verbatim is much
+            # faster than deflating hundreds of PNG/JPEG files and also keeps
+            # the ZIP bytes identical to the extracted originals.
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as archive:
+                for raw_name in names:
+                    name = Path(str(raw_name)).name
+                    if not name or name in seen:
+                        continue
+                    asset_path = (base_dir / name).resolve()
+                    if base_dir not in asset_path.parents or not asset_path.is_file():
+                        continue
+                    archive.write(asset_path, arcname=name)
+                    seen.add(name)
+                    added += 1
 
-        if not added:
-            return self._send_json({"error": "没有可打包的图片"}, 400)
+            if not added:
+                return self._send_json({"error": "没有可打包的图片"}, 400)
 
-        zip_name = Path(str(payload.get("zip_name") or "word-images.zip")).name
-        return self._send_bytes(
-            buffer.getvalue(),
-            "application/zip",
-            extra_headers={
-                "Content-Disposition": "attachment; filename*=UTF-8''{0}".format(quote(zip_name))
-            },
-        )
+            download_token = uuid.uuid4().hex
+            _WORD2IMAGE_ZIPS[download_token] = {
+                "path": zip_path,
+                "name": zip_name,
+                "created": time.time(),
+            }
+            stored = True
+            self._cleanup_word_zips()
+            return self._send_json(
+                {
+                    "download_url": "/api/word2image/zip-download/{0}".format(
+                        download_token
+                    ),
+                    "count": added,
+                    "size": zip_path.stat().st_size,
+                    "zip_name": zip_name,
+                }
+            )
+        finally:
+            if not stored:
+                zip_path.unlink(missing_ok=True)
 
     def _convert_pdf_to_images(self, parsed):
         query = parse_qs(parsed.query)

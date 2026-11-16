@@ -81,10 +81,21 @@ class WordImageEndpointTest(unittest.TestCase):
                 )
                 with urllib.request.urlopen(zip_request) as response:
                     self.assertEqual(response.status, 200)
+                    self.assertEqual(
+                        response.headers.get("Content-Type"),
+                        "application/json; charset=utf-8",
+                    )
+                    zip_info = json.loads(response.read().decode("utf-8"))
+
+                self.assertEqual(zip_info["count"], len(set(names)))
+                self.assertTrue(zip_info["download_url"])
+                with urllib.request.urlopen(base + zip_info["download_url"]) as response:
+                    self.assertEqual(response.status, 200)
                     self.assertEqual(response.headers.get("Content-Type"), "application/zip")
                     archive = zipfile.ZipFile(io.BytesIO(response.read()))
                 self.assertEqual(sorted(archive.namelist()), sorted(set(names)))
                 for name in sorted(set(names)):
+                    self.assertEqual(archive.getinfo(name).compress_type, zipfile.ZIP_STORED)
                     with archive.open(name) as member:
                         self.assertTrue(member.read())
             finally:

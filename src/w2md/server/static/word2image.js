@@ -39,6 +39,7 @@
     "image/avif", "image/x-icon", "image/vnd.microsoft.icon",
     "image/bmp", "image/svg+xml"
   ];
+  var MAX_CLIPBOARD_IMAGES = 20;
 
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
@@ -147,7 +148,10 @@
     var count = selectedImages().length;
     copySelectedBtn.disabled = count === 0;
     copySelectedBtn.textContent = "复制选中 (" + count + ")";
-    downloadZipBtn.disabled = count === 0;
+    copySelectedBtn.title = count > MAX_CLIPBOARD_IMAGES
+      ? "浏览器剪贴板建议一次不超过 " + MAX_CLIPBOARD_IMAGES + " 张，请分批复制或使用打包下载"
+      : "";
+    downloadZipBtn.disabled = copyable === 0;
     selectAll.disabled = copyable === 0;
     selectAll.checked = copyable > 0 && count === copyable;
     selectAll.indeterminate = count > 0 && count < copyable;
@@ -342,7 +346,7 @@
   function downloadZip() {
     var images = selectedImages();
     if (!images.length) {
-      toast("请先选择要打包的图片", true);
+      toast("请先勾选要打包的图片，或点击「全选」", true);
       return;
     }
 
@@ -361,28 +365,33 @@
 
     var zipName = (state.filename || "word-images").replace(/\.docx$/i, "") + "-images.zip";
     downloadZipBtn.disabled = true;
+    downloadZipBtn.textContent = "正在打包…";
+    toast("正在打包 " + files.length + " 张图片，请稍候…");
     fetch("/api/word2image/zip", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token: state.token, files: files, zip_name: zipName })
     }).then(function (response) {
-      if (response.ok) { return response.blob(); }
       return window.qtParseApiResponse(response).then(function (data) {
-        throw new Error(data.error || "打包失败");
+        if (!response.ok) {
+          throw new Error(data.error || "打包失败");
+        }
+        return data;
       });
-    }).then(function (blob) {
-      var url = URL.createObjectURL(blob);
-      var link = document.createElement("a");
-      link.href = url;
-      link.download = zipName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-      toast("已打包 " + files.length + " 张图片");
+    }).then(function (data) {
+      if (!data.download_url) {
+        throw new Error("服务器没有返回下载地址");
+      }
+      var frame = document.createElement("iframe");
+      frame.style.display = "none";
+      frame.src = data.download_url;
+      document.body.appendChild(frame);
+      setTimeout(function () { frame.remove(); }, 120000);
+      toast("已打包 " + (data.count || files.length) + " 张图片，开始下载…");
     }).catch(function (error) {
       toast("打包失败：" + (error.message || error), true);
     }).then(function () {
+      downloadZipBtn.textContent = "打包下载";
       updateSelection();
     });
   }
@@ -494,6 +503,15 @@
   function copyImages(images) {
     if (!images.length) {
       toast("请先选择要复制的图片", true);
+      return;
+    }
+    if (images.length > MAX_CLIPBOARD_IMAGES) {
+      toast(
+        "浏览器剪贴板一次最多建议复制 " + MAX_CLIPBOARD_IMAGES +
+        " 张图片；当前已选 " + images.length +
+        " 张，请分批复制，或使用「打包下载」",
+        true
+      );
       return;
     }
     if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
