@@ -61,7 +61,9 @@ def convert(source, output_dir, config=None, basename=None, source_name=None):
         doc_root = package.read_xml(DOCUMENT_PART)
         numbering = None
         if package.has_part(NUMBERING_PART):
-            numbering = NumberingTable.from_xml(package.read_xml(NUMBERING_PART))
+            numbering = NumberingTable.from_xml(
+                package.read_xml(NUMBERING_PART), styles=styles
+            )
 
         extraction = None
         if config.assets_mode == "placeholder":
@@ -109,6 +111,7 @@ def convert(source, output_dir, config=None, basename=None, source_name=None):
                             "conversion_failed", 0
                         ),
                         "image_unsupported": extraction.summary.get("unsupported", 0),
+                        "image_embedded": extraction.summary.get("embedded", 0),
                         "image_special": extraction.summary.get("special", 0),
                         "image_placeholders": replaced_count,
                         "image_manifest": "assets/manifest.json",
@@ -244,6 +247,7 @@ def _iter_images_in(nodes):
 
 def _replace_images_with_placeholders(document, extraction, report):
     placeholders = extraction.placeholders if extraction is not None else []
+    placeholder_set = set(placeholders)
     used = set()
     next_unused = [0]
     unmatched = [0]
@@ -272,6 +276,11 @@ def _replace_images_with_placeholders(document, extraction, report):
         for node in nodes:
             if isinstance(node, Image):
                 result.append(Text(take_placeholder(node)))
+            elif isinstance(node, Text) and node.text in placeholder_set:
+                # Embedded objects already carry their placeholder as text;
+                # treat it as placed so it is not reported as missing.
+                used.add(node.text)
+                result.append(node)
             elif isinstance(node, (Bold, Italic, Color, Highlight, Underline)):
                 node.children = transform(node.children)
                 if node.children and all(is_placeholder(child) for child in node.children):

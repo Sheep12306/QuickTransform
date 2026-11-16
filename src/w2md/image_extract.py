@@ -31,8 +31,17 @@ from pathlib import Path
 
 from lxml import etree
 
-from .opc.image_refs import iter_image_references
-from .opc.ns import IMAGE_PLACEHOLDER_ATTR, PIC_NS, V_NS, W_NS, WP_NS
+from .opc.image_refs import iter_media_references
+from .opc.ns import (
+    A_NS,
+    IMAGE_PLACEHOLDER_ATTR,
+    O_NS,
+    PIC_NS,
+    R_NS,
+    V_NS,
+    W_NS,
+    WP_NS,
+)
 from .opc.package import DOCUMENT_PART, DOCUMENT_RELS_PART, STYLES_PART, OpcPackage
 from .parse.styles import StyleTable
 
@@ -41,6 +50,9 @@ W = "{%s}" % W_NS
 V = "{%s}" % V_NS
 WP = "{%s}" % WP_NS
 PIC = "{%s}" % PIC_NS
+A = "{%s}" % A_NS
+O = "{%s}" % O_NS
+R = "{%s}" % R_NS
 
 PLACEHOLDER_PREFIX = "{{SHOWDOC_IMAGE_"
 PLACEHOLDER_MARKER = PLACEHOLDER_PREFIX
@@ -50,23 +62,27 @@ OCCURRENCE_PREFIX = "IMG_OCC_"
 UNSUPPORTED_PREFIX = "{{SHOWDOC_UNSUPPORTED_IMAGE_"
 OVERSIZED_PREFIX = "{{SHOWDOC_OVERSIZED_IMAGE_"
 CONVERSION_FAILED_PREFIX = "{{SHOWDOC_CONVERSION_FAILED_IMAGE_"
+EMBEDDED_PREFIX = "{{SHOWDOC_EMBEDDED_"
 
 COMPATIBILITY_SUPPORTED = "supported"
 COMPATIBILITY_CONVERTED = "converted"
 COMPATIBILITY_OVERSIZED = "oversized"
 COMPATIBILITY_CONVERSION_FAILED = "conversion_failed"
 COMPATIBILITY_UNSUPPORTED = "unsupported"
+COMPATIBILITY_EMBEDDED = "embedded"
 COMPATIBILITY_CATEGORIES = (
     COMPATIBILITY_SUPPORTED,
     COMPATIBILITY_CONVERTED,
     COMPATIBILITY_OVERSIZED,
     COMPATIBILITY_CONVERSION_FAILED,
     COMPATIBILITY_UNSUPPORTED,
+    COMPATIBILITY_EMBEDDED,
 )
 SPECIAL_COMPATIBILITIES = (
     COMPATIBILITY_OVERSIZED,
     COMPATIBILITY_CONVERSION_FAILED,
     COMPATIBILITY_UNSUPPORTED,
+    COMPATIBILITY_EMBEDDED,
 )
 
 SAFE_UPLOAD_FORMATS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
@@ -98,6 +114,10 @@ def conversion_failed_placeholder(order):
     return CONVERSION_FAILED_PREFIX + str(order).zfill(6) + "}}"
 
 
+def embedded_placeholder(order):
+    return EMBEDDED_PREFIX + str(order).zfill(6) + "}}"
+
+
 def placeholder_for_compatibility(compatibility, order):
     """Return the Markdown placeholder for a classified image position."""
 
@@ -107,6 +127,8 @@ def placeholder_for_compatibility(compatibility, order):
         return oversized_placeholder(order)
     if compatibility == COMPATIBILITY_CONVERSION_FAILED:
         return conversion_failed_placeholder(order)
+    if compatibility == COMPATIBILITY_EMBEDDED:
+        return embedded_placeholder(order)
     return placeholder_for(order)
 
 
@@ -115,6 +137,7 @@ def special_placeholder_prefixes():
         COMPATIBILITY_UNSUPPORTED: UNSUPPORTED_PREFIX,
         COMPATIBILITY_OVERSIZED: OVERSIZED_PREFIX,
         COMPATIBILITY_CONVERSION_FAILED: CONVERSION_FAILED_PREFIX,
+        COMPATIBILITY_EMBEDDED: EMBEDDED_PREFIX,
     }
 
 
@@ -220,6 +243,10 @@ class ImageOccurrence:
     compatibility: str = COMPATIBILITY_SUPPORTED
     compatibility_reason: str = ""
     requires_conversion: bool = False
+    embedded_part: str | None = None
+    prog_id: str | None = None
+    embedded_label: str | None = None
+    manual_upload: bool = False
     is_duplicate: bool = False
     duplicate_of: str | None = None
     alt_text: str = ""
@@ -273,6 +300,10 @@ class ImageOccurrence:
             "mime_type": self.mime_type,
             "compatibility": self.compatibility,
             "requires_conversion": self.requires_conversion,
+            "embedded_part": self.embedded_part,
+            "prog_id": self.prog_id,
+            "embedded_label": self.embedded_label,
+            "manual_upload": self.manual_upload,
             "source_size": self.source_size,
             "source_mime_type": self.source_mime_type,
             "source_width": self.source_width,
@@ -421,9 +452,11 @@ def extract_images_from_package(
         "未执行任何上传；showdoc_url 与 upload_status 由人工处理。",
         "原始图片保存在 assets/original，上传副本保存在 assets/upload。",
         "占位符按 document.xml 正文出现顺序生成；特殊图片保留原序号并使用特殊占位符。",
+        "嵌入的 Word / 视频 / HTML / OLE 对象不提取、不转换、不替换，"
+        "使用 {{SHOWDOC_EMBEDDED_...}} 占位符，需要人工在 ShowDoc 上传原文件。",
     ]
 
-    for order, (element, relationship_id, kind) in enumerate(iter_image_references(root), start=1):
+    for order, (element, relationship_id, kind) in enumerate(iter_media_references(root), start=1):
         alt_text, alt_source = _alt_for(element, order, kind)
         located = context.describe(element)
         occurrence = ImageOccurrence(
@@ -437,6 +470,30 @@ def extract_images_from_package(
             context_after=located["context_after"],
         )
         occurrences.append(occurrence)
+
+        if kind == "embedded":
+            _classify_embedded(
+                occurrence,
+                element,
+                relationship_id,
+                rels,
+                part_names,
+                package,
+                annotate,
+            )
+            # Preview icons / poster frames / video payloads belong to the
+            # embedded object; they must not be reported as unreferenced media.
+            for related_id in _relationship_ids(element):
+                related = rels.get(related_id)
+                if not related or related.get("mode") == "External":
+                    continue
+                related_part = _resolve_target(
+                    DOCUMENT_PART, related.get("target") or ""
+                )
+                if related_part.startswith("word/media/"):
+                    used_parts.add(related_part)
+            _report_special(report, occurrence)
+            continue
 
         if not relationship_id:
             _mark_special(
@@ -667,6 +724,10 @@ def extract_images_from_package(
     for occurrence in occurrences:
         if occurrence.compatibility not in SPECIAL_COMPATIBILITIES:
             continue
+        if occurrence.compatibility == COMPATIBILITY_EMBEDDED:
+            # Embedded files are a manual-upload reminder, not an extraction
+            # failure.
+            continue
         errors.append(
             {
                 "kind": (
@@ -722,6 +783,7 @@ def extract_images_from_package(
             "unsupported": UNSUPPORTED_PREFIX,
             "oversized": OVERSIZED_PREFIX,
             "conversion_failed": CONVERSION_FAILED_PREFIX,
+            "embedded": EMBEDDED_PREFIX,
         },
         # Legacy aliases kept so older tooling and tests keep working.
         "document": document_name,
@@ -911,6 +973,134 @@ def _resolve_target(source_part, target):
     return posixpath.normpath(posixpath.join(base_dir, target))
 
 
+def _classify_embedded(
+    occurrence,
+    element,
+    relationship_id,
+    rels,
+    part_names,
+    package,
+    annotate,
+):
+    """Describe one embedded Word document / video / HTML / OLE object.
+
+    Embedded payloads are deliberately not copied, converted or replaced.  The
+    manifest records what it is so a human can upload the original file to
+    ShowDoc and paste the URL next to the special placeholder.
+    """
+
+    prog_id = _embedded_prog_id(element)
+    relationship = rels.get(relationship_id) if relationship_id else None
+    target = (relationship or {}).get("target") or ""
+    part = None
+    if relationship and relationship.get("mode") != "External" and target:
+        part = _resolve_target(DOCUMENT_PART, target)
+
+    extension = _embedded_extension(part or target, prog_id, element)
+    label = _embedded_label(extension, prog_id, element)
+
+    occurrence.source_part = part
+    occurrence.embedded_part = part
+    occurrence.prog_id = prog_id
+    occurrence.embedded_label = label
+    occurrence.manual_upload = True
+    occurrence.compatibility = COMPATIBILITY_EMBEDDED
+    occurrence.requires_conversion = False
+    occurrence.placeholder = embedded_placeholder(occurrence.order)
+    occurrence.status = "manual_upload"
+    occurrence.upload_status = "manual_upload"
+    occurrence.replacement_status = "manual"
+    occurrence.source_extension = extension
+    occurrence.extension = extension
+    occurrence.source_mime_type = _mime_type(extension) if extension else None
+    occurrence.mime_type = occurrence.source_mime_type
+    if occurrence.alt_source == "fallback":
+        occurrence.alt_text = "嵌入对象{0}".format(occurrence.order)
+
+    if part and part in part_names:
+        try:
+            data = package.read_part(part)
+        except Exception:
+            data = None
+        if data is not None:
+            occurrence.source_size = len(data)
+            occurrence.size = len(data)
+            occurrence.source_sha256 = hashlib.sha256(data).hexdigest()
+            occurrence.sha256 = occurrence.source_sha256
+
+    reason_subject = label if label.startswith("嵌入") else "嵌入" + label
+    occurrence.compatibility_reason = (
+        "{0}：请自行在 ShowDoc 上传，本工具不转换、不替换".format(reason_subject)
+    )
+    if annotate:
+        element.set(IMAGE_PLACEHOLDER_ATTR, occurrence.placeholder)
+
+
+def _relationship_ids(element):
+    relationship_ids = set()
+    for child in element.iter():
+        if not isinstance(child.tag, str):
+            continue
+        for attribute in (R + "id", R + "embed", R + "link"):
+            value = child.get(attribute)
+            if value:
+                relationship_ids.add(value)
+    return relationship_ids
+
+
+def _embedded_prog_id(element):
+    for child in element.iter():
+        if isinstance(child.tag, str) and child.tag == O + "OLEObject":
+            value = child.get("ProgID")
+            if value:
+                return value
+    return None
+
+
+def _embedded_extension(path, prog_id, element):
+    suffix = Path(str(path or "")).suffix.lower()
+    if suffix and suffix != ".bin":
+        return suffix
+
+    prog = (prog_id or "").lower()
+    for marker, extension in (
+        ("word.document", ".docx"),
+        ("excel.sheet", ".xlsx"),
+        ("powerpoint.show", ".pptx"),
+        ("powerpoint.slide", ".pptx"),
+        ("visio.drawing", ".vsdx"),
+        ("acrobat.document", ".pdf"),
+        ("wordpad.document", ".rtf"),
+    ):
+        if marker in prog:
+            return extension
+
+    if _has_descendant(element, A + "videoFile"):
+        return suffix or ".mp4"
+    if element.tag == W + "altChunk":
+        return ".html"
+    return suffix or None
+
+
+def _has_descendant(element, tag):
+    return any(
+        isinstance(child.tag, str) and child.tag == tag for child in element.iter()
+    )
+
+
+def _embedded_label(extension, prog_id, element):
+    prog = (prog_id or "").lower()
+    if "video" in prog or _has_descendant(element, A + "videoFile"):
+        return "视频"
+    if element.tag == W + "altChunk":
+        return "HTML"
+    if extension and extension != ".bin":
+        return extension.lstrip(".").upper()
+    if "package" in prog or extension == ".bin":
+        return "嵌入文件"
+    return "嵌入对象"
+
+
 def _mark_special(occurrence, element, compatibility, detail, annotate):
     occurrence.compatibility = compatibility
     occurrence.compatibility_reason = detail
@@ -990,6 +1180,7 @@ def _placeholder_collisions(root):
         UNSUPPORTED_PREFIX,
         OVERSIZED_PREFIX,
         CONVERSION_FAILED_PREFIX,
+        EMBEDDED_PREFIX,
     )
     samples = []
     for text_element in root.iter(W + "t"):
@@ -1155,6 +1346,22 @@ def _format_name(extension):
 
 
 def _report_special(report, occurrence):
+    if occurrence.compatibility == COMPATIBILITY_EMBEDDED:
+        _report(
+            report,
+            "embedded_object",
+            "嵌入对象",
+            "{0}（{1}）：{2}{3}".format(
+                occurrence.placeholder,
+                occurrence.embedded_label or occurrence.compatibility,
+                occurrence.compatibility_reason,
+                "；DOCX 内位置 {0}".format(occurrence.embedded_part)
+                if occurrence.embedded_part
+                else "",
+            ),
+        )
+        return
+
     kind = (
         "image_failed"
         if occurrence.compatibility == COMPATIBILITY_CONVERSION_FAILED

@@ -14,6 +14,7 @@
   var copySelectedBtn = document.getElementById("copy-selected");
   var downloadZipBtn = document.getElementById("download-zip");
   var resetBtn = document.getElementById("reset-btn");
+  var copyManifestBtn = document.getElementById("copy-manifest");
   var downloadManifestBtn = document.getElementById("download-manifest");
   var toastEl = document.getElementById("toast");
   var lightbox = document.getElementById("lightbox");
@@ -61,6 +62,9 @@
   }
 
   function extensionLabel(image) {
+    if (image.compatibility === "embedded") {
+      return image.embedded_label || "嵌入对象";
+    }
     var format = image.upload_format || image.source_format ||
       (image.extension || "").replace(".", "");
     return (format || "未知").toUpperCase();
@@ -108,6 +112,7 @@
   }
 
   function formatKey(image) {
+    if (image.compatibility === "embedded") { return "嵌入文件"; }
     var format = (image.source_format || image.upload_format ||
       (image.extension || "").replace(".", "")).toLowerCase();
     if (format === "jpg" || format === "jpeg") { return "JPG"; }
@@ -122,7 +127,8 @@
       converted: "已转 PNG",
       oversized: "超限预览",
       conversion_failed: "转换失败",
-      unsupported: "不支持"
+      unsupported: "不支持",
+      embedded: "需手动上传"
     };
     return labels[image.compatibility] || "";
   }
@@ -237,6 +243,8 @@
       if (image.status === "failed" || image.compatibility === "conversion_failed" ||
           image.compatibility === "unsupported" || image.compatibility === "oversized") {
         card.classList.add("failed");
+      } else if (image.compatibility === "embedded") {
+        card.classList.add("embedded");
       }
 
       var canDownload = hasSource(image);
@@ -285,7 +293,9 @@
         var strong = document.createElement("strong");
         strong.textContent = extensionLabel(image);
         var span = document.createElement("span");
-        if (image.status === "failed" && !hasSource(image)) {
+        if (image.compatibility === "embedded") {
+          span.textContent = "嵌入文件，请自行在 ShowDoc 上传";
+        } else if (image.status === "failed" && !hasSource(image)) {
           span.textContent = "图片未能提取";
         } else if (!hasUpload(image)) {
           span.textContent = "没有可上传副本，原始文件仍可下载";
@@ -327,7 +337,8 @@
         var compatBadge = document.createElement("span");
         compatBadge.className = "badge " + (
           image.compatibility === "supported" ? "" :
-          image.compatibility === "converted" ? "badge-ok" : "badge-error"
+          image.compatibility === "converted" ? "badge-ok" :
+          image.compatibility === "embedded" ? "badge-warn" : "badge-error"
         );
         compatBadge.textContent = compatibility;
         compatBadge.title = image.compatibility_reason || compatibility;
@@ -414,12 +425,77 @@
     downloadFile(sourceSource(image), image.source_filename || image.filename || "");
   }
 
-  function downloadManifest() {
+  function manifestFilename() {
+    var stem = (state.filename || "word-images").replace(/\.docx$/i, "");
+    return (stem || "word-images") + ".manifest.json";
+  }
+
+  function fetchManifestText() {
     if (!state.manifestUrl) {
-      toast("没有可下载的 manifest.json", true);
-      return;
+      return Promise.reject(new Error("没有可用的 manifest.json"));
     }
-    downloadFile(state.manifestUrl, "manifest.json");
+    return fetch(state.manifestUrl).then(function (response) {
+      if (!response.ok) {
+        throw new Error("读取 manifest 失败（HTTP " + response.status + "）");
+      }
+      return response.text();
+    });
+  }
+
+  function fallbackCopyText(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+    area.select();
+    var copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch (error) {
+      copied = false;
+    }
+    area.remove();
+    return copied;
+  }
+
+  function copyManifest() {
+    fetchManifestText().then(function (text) {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        return navigator.clipboard.writeText(text).then(function () {
+          return true;
+        }).catch(function () {
+          return fallbackCopyText(text);
+        });
+      }
+      return Promise.resolve(fallbackCopyText(text));
+    }).then(function (copied) {
+      if (copied === false) {
+        throw new Error("浏览器不允许写入剪贴板");
+      }
+      toast("已复制 manifest.json 内容");
+    }).catch(function (error) {
+      toast("复制 manifest 失败：" + (error.message || error), true);
+    });
+  }
+
+  function downloadManifest() {
+    fetchManifestText().then(function (text) {
+      var name = manifestFilename();
+      var blob = new Blob([text], { type: "application/json;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      toast("已开始下载：" + name);
+    }).catch(function (error) {
+      toast("下载 manifest 失败：" + (error.message || error), true);
+    });
   }
 
   function downloadZip() {
@@ -691,6 +767,7 @@
       state.selected = {};
       state.blobs = {};
       state.manifestUrl = data.manifest_url || "";
+      copyManifestBtn.disabled = !state.manifestUrl;
       downloadManifestBtn.disabled = !state.manifestUrl;
 
       resultFile.textContent = state.filename;
@@ -702,11 +779,21 @@
       if (summary.oversized) { parts.push(summary.oversized + " 张超限"); }
       if (summary.conversion_failed) { parts.push(summary.conversion_failed + " 张转换失败"); }
       if (summary.unsupported) { parts.push(summary.unsupported + " 张不支持"); }
+      if (summary.embedded) {
+        parts.push(summary.embedded + " 个嵌入文件（需手动上传）");
+      }
       resultSummary.textContent = parts.join(" · ");
 
       populateFormatFilter();
       renderGallery();
       show(result);
+      if (summary.embedded) {
+        toast(
+          "检测到 " + summary.embedded +
+          " 个嵌入的 Word/视频/HTML 对象，本工具不处理，请自行上传到 ShowDoc",
+          true
+        );
+      }
     };
     xhr.onerror = function () {
       hide(statusPanel);
@@ -726,6 +813,7 @@
     state.manifestUrl = "";
     formatFilter.value = "";
     formatFilter.disabled = true;
+    copyManifestBtn.disabled = true;
     downloadManifestBtn.disabled = true;
     gallery.innerHTML = "";
     resultFile.textContent = "";
@@ -756,6 +844,7 @@
   });
 
   downloadZipBtn.addEventListener("click", downloadZip);
+  copyManifestBtn.addEventListener("click", copyManifest);
   downloadManifestBtn.addEventListener("click", downloadManifest);
 
   resetBtn.addEventListener("click", reset);

@@ -89,6 +89,7 @@
 .image-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .image-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .image-card.failed { border-color: #f1c0bd; background: #fffafa; }
+.image-card.embedded { border-color: #f5d6b4; background: #fffdf8; }
 
 .image-select {
   position: absolute;

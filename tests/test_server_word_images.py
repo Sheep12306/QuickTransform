@@ -12,6 +12,7 @@ import zipfile
 from pathlib import Path
 
 from test_image_extract import build_fixture
+from test_embedded_objects import build_fixture as build_embedded_fixture
 from w2md.server.app import Handler, ThreadingHTTPServer
 
 
@@ -122,6 +123,58 @@ class WordImageEndpointTest(unittest.TestCase):
                     self.assertEqual(archive.getinfo(name).compress_type, zipfile.ZIP_STORED)
                     with archive.open(name) as member:
                         self.assertTrue(member.read())
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_embedded_objects_are_reported_for_manual_upload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            docx = Path(tmp) / "embedded.docx"
+            build_embedded_fixture(docx)
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                base = "http://127.0.0.1:{0}".format(server.server_address[1])
+                request = urllib.request.Request(
+                    base + "/api/word2image/extract?filename=embedded.docx",
+                    data=docx.read_bytes(),
+                    method="POST",
+                )
+                with urllib.request.urlopen(request) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+
+                self.assertEqual(body["summary"]["embedded"], 3)
+                embedded = [
+                    image
+                    for image in body["images"]
+                    if image["compatibility"] == "embedded"
+                ]
+                self.assertEqual(
+                    [image["placeholder"] for image in embedded],
+                    [
+                        "{{SHOWDOC_EMBEDDED_000002}}",
+                        "{{SHOWDOC_EMBEDDED_000003}}",
+                        "{{SHOWDOC_EMBEDDED_000004}}",
+                    ],
+                )
+                self.assertTrue(all(image["manual_upload"] for image in embedded))
+                self.assertFalse(
+                    any(
+                        "media/icon.png" in (image["source_part"] or "")
+                        or "media/poster.png" in (image["source_part"] or "")
+                        for image in body["images"]
+                    )
+                )
+
+                with urllib.request.urlopen(base + body["manifest_url"]) as response:
+                    manifest = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(manifest["summary"]["embedded"], 3)
+                self.assertEqual(
+                    manifest["placeholder_prefixes"]["embedded"],
+                    "{{SHOWDOC_EMBEDDED_",
+                )
             finally:
                 server.shutdown()
                 server.server_close()

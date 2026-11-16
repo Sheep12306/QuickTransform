@@ -73,14 +73,18 @@ Markdown 中不再嵌入图片路径或 Base64，正常图片位置为：
 {{SHOWDOC_UNSUPPORTED_IMAGE_000018}}
 {{SHOWDOC_OVERSIZED_IMAGE_000019}}
 {{SHOWDOC_CONVERSION_FAILED_IMAGE_000020}}
+{{SHOWDOC_EMBEDDED_000021}}
 ```
 
 后续图片不会因为特殊图片而重新编号。同一媒体文件在文档中重复出现时，只会保存一份原图和一份上传副本，但每个出现位置仍然使用独立 `occurrence_id` 和占位符。
+
+嵌入的 Word 文档、视频、HTML 和 OLE 对象不提取、不转换、不替换，只生成 `{{SHOWDOC_EMBEDDED_...}}` 占位符并提醒人工在 ShowDoc 上传原文件；其预览图标/视频封面不会被当作普通图片处理。网页工具栏可一键复制 manifest.json，或下载带原文档名的 `<文档名>.manifest.json`。
 
 ## 识别范围
 
 - DrawingML：`a:blip@r:embed`
 - VML：`v:imagedata@r:id`
+- 嵌入对象：`w:object` / `o:OLEObject`、`a:videoFile`、`w:altChunk`、`w:control`
 - 正文段落、表格单元格、列表段落、同一段落多张图片
 - 同一图片重复出现
 
@@ -104,6 +108,7 @@ Markdown 中不再嵌入图片路径或 Base64，正常图片位置为：
 | `oversized` | `{{SHOWDOC_OVERSIZED_IMAGE_...}}` | 预览 PNG/JPEG | 超过大小/像素阈值；副本供人工使用，不自动替换 |
 | `conversion_failed` | `{{SHOWDOC_CONVERSION_FAILED_IMAGE_...}}` | 无 | 转换失败 |
 | `unsupported` | `{{SHOWDOC_UNSUPPORTED_IMAGE_...}}` | 无 | 不支持的格式 |
+| `embedded` | `{{SHOWDOC_EMBEDDED_...}}` | 无 | 嵌入的 Word/视频/HTML/OLE 对象，仅提醒人工上传 |
 
 默认阈值：
 
@@ -201,7 +206,7 @@ Markdown 中不再嵌入图片路径或 Base64，正常图片位置为：
 - `source_file` / `upload_file`：原始文件与上传副本的路径，相对于输出目录；路径使用 `/`。
 - `source_sha256`：DOCX 内原始图片字节的 SHA-256。
 - `upload_sha256`：上传副本字节的 SHA-256。普通图片与 `source_sha256` 相同；转换图片必须使用该值匹配上传记录。
-- `compatibility`：`supported` / `converted` / `oversized` / `conversion_failed` / `unsupported`。
+- `compatibility`：`supported` / `converted` / `oversized` / `conversion_failed` / `unsupported` / `embedded`。
 - `requires_conversion`：上传副本是否需要转换/重新生成。
 - `section`：向前查找最近的大纲级别/标题样式段落，作为所在章节。
 - `context_before` / `context_after`：图片同一段落中图前、图后的文字；为空时取相邻段落。仅用于缺失清单定位，已截断。

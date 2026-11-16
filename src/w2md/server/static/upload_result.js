@@ -161,6 +161,7 @@
     document.getElementById("count-oversized").textContent = number(counts.oversized);
     document.getElementById("count-conversion-failed").textContent =
       number(counts.conversion_failed);
+    document.getElementById("count-embedded").textContent = number(counts.embedded);
     document.getElementById("count-special").textContent = number(counts.special_placeholders);
     document.getElementById("count-unexpected").textContent = number(counts.unexpected_upload);
     document.getElementById("count-review").textContent = number(counts.needs_review);
@@ -366,9 +367,13 @@
     } else {
       var reason = document.createElement("div");
       reason.className = "result-reason";
-      reason.textContent = image.is_special
-        ? "特殊占位符保持不动：" + (image.reason || image.compatibility_reason || "")
-        : (image.reason || "保留原占位符");
+      if (image.compatibility === "embedded") {
+        reason.textContent = "嵌入文件不自动替换，请自行在 ShowDoc 上传";
+      } else {
+        reason.textContent = image.is_special
+          ? "特殊占位符保持不动：" + (image.reason || image.compatibility_reason || "")
+          : (image.reason || "保留原占位符");
+      }
       urlCell.appendChild(reason);
     }
     row.appendChild(urlCell);

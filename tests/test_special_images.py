@@ -229,6 +229,52 @@ class SpecialImageTest(unittest.TestCase):
         )
         self.assertIsNone(MANIFEST["images"][1].get("showdoc_url"))
 
+    def test_embedded_files_are_reminders_not_replaceable_items(self):
+        manifest = {
+            "document_id": "doc-1",
+            "images": [
+                {
+                    "sequence": 1,
+                    "occurrence_id": "IMG_OCC_000001",
+                    "placeholder": "{{SHOWDOC_UNSUPPORTED_IMAGE_000001}}",
+                    "compatibility": "unsupported",
+                    "compatibility_reason": "不支持的图片格式",
+                    "source_file": "assets/doc-image-000001.svg",
+                },
+                {
+                    "sequence": 2,
+                    "occurrence_id": "IMG_OCC_000002",
+                    "placeholder": "{{SHOWDOC_EMBEDDED_000002}}",
+                    "compatibility": "embedded",
+                    "compatibility_reason": "嵌入文件，请手动上传",
+                    "embedded_label": "DOCX",
+                    "embedded_part": "word/embeddings/embedded.docx",
+                },
+            ],
+        }
+        markdown = (
+            "{{SHOWDOC_UNSUPPORTED_IMAGE_000001}}\n\n"
+            "{{SHOWDOC_EMBEDDED_000002}}\n"
+        )
+
+        analysis = analyze_special_images(markdown, manifest)
+
+        self.assertEqual(len(analysis.items), 1)
+        self.assertEqual(
+            analysis.items[0].placeholder, "{{SHOWDOC_UNSUPPORTED_IMAGE_000001}}"
+        )
+        self.assertEqual(analysis.counts["embedded_images"], 1)
+        self.assertEqual(analysis.counts["special_images"], 1)
+        self.assertTrue(
+            any("嵌入对象" in warning for warning in analysis.warnings)
+        )
+
+        result = apply_special_images(markdown, {})
+        self.assertIn("{{SHOWDOC_EMBEDDED_000002}}", result.markdown)
+        self.assertTrue(
+            any("嵌入文件占位符" in warning for warning in result.warnings)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

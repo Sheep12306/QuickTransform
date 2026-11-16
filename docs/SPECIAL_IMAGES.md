@@ -10,6 +10,8 @@
 
 这些图片在 manifest 中的 `compatibility` 为 `unsupported` / `oversized` / `conversion_failed`，不会进入自动上传和自动替换流程。人工把它们上传到 ShowDoc 后，在本页面逐张填写 URL。
 
+嵌入的 Word/视频/HTML/OLE 对象使用 `{{SHOWDOC_EMBEDDED_...}}` 占位符，本页面**不处理**这类对象，只会在提示中列出，需要直接在 ShowDoc 手动上传原文件。
+
 > 本页面**只处理特殊图片**，不处理普通占位符 `{{SHOWDOC_IMAGE_000001}}`，也不接受 `upload_result.json`。
 > 普通图片请使用 [上传结果导入](UPLOAD_RESULT.md)。
 

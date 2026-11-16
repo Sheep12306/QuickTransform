@@ -273,14 +273,75 @@ class HeadingTest(unittest.TestCase):
         )
         markdown, _, report_data = self.convert_markdown(body)
 
-        self.assertIn("## 编号二级", markdown)
+        self.assertIn("1.1 编号二级", markdown)
+        self.assertNotIn("## 1.1 编号二级", markdown)
         self.assertIn("## 1.1 纯文本编号", markdown)
         self.assertIn("# **1. 单级编号标题**", markdown)
+        self.assertIn("• 项目符号项", markdown)
+        self.assertIn("• **大号项目符号**", markdown)
         self.assertNotIn("# 项目符号项", markdown)
         self.assertNotIn("## 项目符号项", markdown)
         self.assertNotIn("# 大号项目符号", markdown)
+        self.assertNotIn("1.1.1 编号二级", markdown)
         sources = [item["source"] for item in report_data["headings"]]
-        self.assertEqual(sources, ["numbering", "numbering", "numbering"])
+        self.assertEqual(sources, ["numbering", "numbering"])
+
+    def test_chapter_numbers_and_list_bullets_are_preserved(self):
+        styles = """
+<w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+<w:style w:type="paragraph" w:styleId="NumHeading1">
+  <w:name w:val="heading 1"/><w:basedOn w:val="Normal"/>
+  <w:pPr><w:outlineLvl w:val="0"/></w:pPr>
+</w:style>
+<w:style w:type="paragraph" w:styleId="NumHeading2">
+  <w:name w:val="heading 2"/><w:basedOn w:val="Normal"/>
+  <w:pPr><w:outlineLvl w:val="1"/></w:pPr>
+</w:style>
+"""
+        numbering = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:abstractNum w:abstractNumId="10">
+    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:pStyle w:val="NumHeading1"/><w:lvlText w:val="%1"/></w:lvl>
+    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:pStyle w:val="NumHeading2"/><w:lvlText w:val="%1.%2"/></w:lvl>
+  </w:abstractNum>
+  <w:abstractNum w:abstractNumId="11">
+    <w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="○"/></w:lvl>
+    <w:lvl w:ilvl="1"><w:numFmt w:val="bullet"/><w:lvlText w:val="■"/></w:lvl>
+  </w:abstractNum>
+  <w:abstractNum w:abstractNumId="12">
+    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>
+    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1.%2."/></w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="10"><w:abstractNumId w:val="10"/></w:num>
+  <w:num w:numId="11"><w:abstractNumId w:val="11"/></w:num>
+  <w:num w:numId="12"><w:abstractNumId w:val="12"/></w:num>
+</w:numbering>"""
+        body = "".join(
+            [
+                paragraph("需求背景", style="NumHeading1"),
+                paragraph("流程", style="NumHeading2"),
+                paragraph("范围", style="NumHeading1"),
+                paragraph("边界", style="NumHeading2"),
+                paragraph("圆形项目", num_id=11, ilvl=0),
+                paragraph("方形项目", num_id=11, ilvl=1),
+                paragraph("列表一", num_id=12, ilvl=0),
+                paragraph("列表二", num_id=12, ilvl=0),
+                paragraph("列表子项", num_id=12, ilvl=1),
+            ]
+        )
+        markdown, _, _ = self.convert_markdown(
+            body, styles=styles, numbering=numbering
+        )
+
+        self.assertIn("# 1 需求背景", markdown)
+        self.assertIn("## 1.1 流程", markdown)
+        self.assertIn("# 2 范围", markdown)
+        self.assertIn("## 2.1 边界", markdown)
+        self.assertIn("○ 圆形项目", markdown)
+        self.assertIn("　■ 方形项目", markdown)
+        self.assertIn("1. 列表一", markdown)
+        self.assertIn("2. 列表二", markdown)
+        self.assertIn("　2.1. 列表子项", markdown)
 
     def test_heading_level_jump_is_preserved(self):
         body = paragraph("一级", style="Heading1") + paragraph("三级", style="Heading3")

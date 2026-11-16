@@ -10,11 +10,13 @@ _ESCAPE_CHARS = set(["\\", "`", "*", "[", "]", "_"])
 # placeholders share the same rule.
 _PLACEHOLDER = re.compile(
     r"\{\{(?:SHOWDOC_IMAGE_[A-Z0-9_]+|"
-    r"SHOWDOC_(?:UNSUPPORTED|OVERSIZED|CONVERSION_FAILED)_IMAGE_[A-Z0-9_]+)\}\}"
+    r"SHOWDOC_(?:UNSUPPORTED|OVERSIZED|CONVERSION_FAILED)_IMAGE_[A-Z0-9_]+|"
+    r"SHOWDOC_EMBEDDED_\d{6})\}\}"
 )
 _PLACEHOLDER_SPLIT = re.compile(
     r"(\{\{(?:SHOWDOC_IMAGE_[A-Z0-9_]+|"
-    r"SHOWDOC_(?:UNSUPPORTED|OVERSIZED|CONVERSION_FAILED)_IMAGE_[A-Z0-9_]+)\}\})"
+    r"SHOWDOC_(?:UNSUPPORTED|OVERSIZED|CONVERSION_FAILED)_IMAGE_[A-Z0-9_]+|"
+    r"SHOWDOC_EMBEDDED_\d{6})\}\})"
 )
 
 

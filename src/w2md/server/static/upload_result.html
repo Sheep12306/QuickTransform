@@ -28,7 +28,7 @@
   <main class="layout replace-layout">
     <section class="image-hero">
       <h2>只替换真正上传成功的图片</h2>
-      <p>导入浏览器扩展导出的 upload_result.json，按 occurrence_id / 占位符 / upload_sha256 显式映射到 URL。失败图片保留占位符；EMF 转换副本用 PNG 哈希匹配；不支持、超限、转换失败的图片保持特殊占位符，不会整体错位。</p>
+      <p>导入浏览器扩展导出的 upload_result.json，按 occurrence_id / 占位符 / upload_sha256 显式映射到 URL。失败图片保留占位符；EMF 转换副本用 PNG 哈希匹配；不支持、超限、转换失败的图片保持特殊占位符，不会整体错位。嵌入的 Word/视频/HTML 对象不参与替换，只提示人工上传。</p>
     </section>
 
     <section class="replace-inputs">
@@ -116,6 +116,7 @@
         <span class="count-item">不支持 <b id="count-unsupported">0</b></span>
         <span class="count-item">超限 <b id="count-oversized">0</b></span>
         <span class="count-item">转换失败 <b id="count-conversion-failed">0</b></span>
+        <span class="count-item">嵌入文件（需手动上传） <b id="count-embedded">0</b></span>
         <span class="count-item">特殊占位符 <b id="count-special">0</b></span>
         <span class="count-item">意外上传 <b id="count-unexpected">0</b></span>
         <span class="count-item">需人工确认 <b id="count-review">0</b></span>
@@ -126,6 +127,21 @@
       <p class="consistency" id="consistency"></p>
       <ul class="message-list error-list hidden" id="error-list"></ul>
       <ul class="message-list warning-list hidden" id="warning-list"></ul>
+    </section>
+
+    <section class="result-panel hidden" id="result-panel">
+      <div class="panel-head">
+        <h3>最终 Markdown</h3>
+        <div class="result-actions">
+          <button class="ghost-btn" id="copy-result" type="button">复制</button>
+          <button class="ghost-btn" id="download-md" type="button">下载 .md</button>
+          <button class="ghost-btn" id="download-csv" type="button">下载 missing_images.csv</button>
+          <button class="ghost-btn" id="download-report" type="button">下载 replacement_report.json</button>
+          <button class="ghost-btn" id="download-html" type="button">下载 missing_images.html</button>
+        </div>
+      </div>
+      <textarea id="result-text" readonly spellcheck="false"></textarea>
+      <p class="result-note" id="result-note"></p>
     </section>
 
     <section class="mapping-panel hidden" id="mapping-panel">
@@ -148,21 +164,6 @@
           <tbody id="mapping-body"></tbody>
         </table>
       </div>
-    </section>
-
-    <section class="result-panel hidden" id="result-panel">
-      <div class="panel-head">
-        <h3>最终 Markdown</h3>
-        <div class="result-actions">
-          <button class="ghost-btn" id="copy-result" type="button">复制</button>
-          <button class="ghost-btn" id="download-md" type="button">下载 .md</button>
-          <button class="ghost-btn" id="download-csv" type="button">下载 missing_images.csv</button>
-          <button class="ghost-btn" id="download-report" type="button">下载 replacement_report.json</button>
-          <button class="ghost-btn" id="download-html" type="button">下载 missing_images.html</button>
-        </div>
-      </div>
-      <textarea id="result-text" readonly spellcheck="false"></textarea>
-      <p class="result-note" id="result-note"></p>
     </section>
   </main>
 

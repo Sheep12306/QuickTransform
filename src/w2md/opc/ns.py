@@ -8,6 +8,7 @@ A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture"
 V_NS = "urn:schemas-microsoft-com:vml"
+O_NS = "urn:schemas-microsoft-com:office:office"
 MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 
 # In-memory marker written by the image extractor before the document is

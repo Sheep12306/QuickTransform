@@ -29,12 +29,13 @@ from .placeholder_replace import (
     _scan_lines,
     _url_error,
 )
-from .upload_result import normalize_manifest
+from .upload_result import COMPATIBILITY_EMBEDDED, normalize_manifest
 
 
 SPECIAL_PLACEHOLDER = re.compile(
     r"\{\{SHOWDOC_(UNSUPPORTED|OVERSIZED|CONVERSION_FAILED)_IMAGE_\d{6}\}\}"
 )
+EMBEDDED_PLACEHOLDER = re.compile(r"\{\{SHOWDOC_EMBEDDED_\d{6}\}\}")
 NORMAL_PLACEHOLDER = re.compile(r"\{\{SHOWDOC_IMAGE_\d{6}\}\}")
 ANY_PLACEHOLDER = re.compile(r"\{\{SHOWDOC_[A-Z0-9_]+\}\}")
 
@@ -42,6 +43,7 @@ COMPATIBILITY_LABELS = {
     "unsupported": "不支持格式",
     "oversized": "图片超限",
     "conversion_failed": "转换失败",
+    "embedded": "嵌入文件（需手动上传）",
 }
 
 STATUS_LABELS = {
@@ -203,7 +205,14 @@ def analyze_special_images(markdown, manifest, urls=None):
 
     markdown = markdown or ""
     document_id, images = normalize_manifest(manifest)
-    special_images = [image for image in images if image.is_special]
+    special_images = [
+        image
+        for image in images
+        if image.is_special and image.compatibility != COMPATIBILITY_EMBEDDED
+    ]
+    manual_images = [
+        image for image in images if image.compatibility == COMPATIBILITY_EMBEDDED
+    ]
     manifest_provided = isinstance(manifest, dict) and bool(images)
 
     body, code = scan_placeholders(markdown)
@@ -223,7 +232,9 @@ def analyze_special_images(markdown, manifest, urls=None):
     duplicate_tokens = {item["placeholder"] for item in placeholder_duplicates}
 
     explicit = _explicit_mapping(urls) if urls is not None else {}
-    manifest_special = {image.placeholder: image for image in special_images}
+    manifest_special = {
+        image.placeholder: image for image in images if image.is_special
+    }
     unknown_placeholders = [
         {
             "placeholder": token,
@@ -317,7 +328,7 @@ def analyze_special_images(markdown, manifest, urls=None):
 
     if not manifest_provided:
         errors.append("缺少 manifest.json，或 manifest 中没有图片记录")
-    elif not special_images:
+    elif not special_images and not manual_images:
         errors.append(
             "manifest 中没有特殊图片（unsupported / oversized / conversion_failed），"
             "无需使用本工具"
@@ -384,6 +395,14 @@ def analyze_special_images(markdown, manifest, urls=None):
             )
         )
 
+    if manual_images:
+        warnings.append(
+            "manifest 中有 {0} 个嵌入对象（Word / 视频 / HTML / OLE 等），"
+            "本工具不处理，请在 ShowDoc 手动上传原文件：{1}".format(
+                len(manual_images),
+                _join_tokens([image.placeholder for image in manual_images]),
+            )
+        )
     if not in_markdown and special_images:
         warnings.append(
             "Markdown 正文中没有发现 manifest 里的特殊占位符；"
@@ -461,7 +480,8 @@ def analyze_special_images(markdown, manifest, urls=None):
         counts={
             "manifest_images": len(images),
             "special_images": len(special_images),
-            "normal_images": len(images) - len(special_images),
+            "embedded_images": len(manual_images),
+            "normal_images": len(images) - len(special_images) - len(manual_images),
             "in_markdown": len(in_markdown),
             "in_code_only": len(in_code_only),
             "matched": len(matched),
@@ -538,6 +558,9 @@ def apply_special_images(markdown, mapping, alt_by_placeholder=None):
     remaining_special = [
         occurrence for occurrence in body if occurrence["kind"] == "special"
     ]
+    remaining_embedded = [
+        occurrence for occurrence in body if occurrence["kind"] == "embedded"
+    ]
     remaining_other = [
         occurrence for occurrence in body if occurrence["kind"] == "other"
     ]
@@ -558,6 +581,13 @@ def apply_special_images(markdown, mapping, alt_by_placeholder=None):
         errors.append(
             "最终 Markdown 仍包含 {0} 个未识别占位符：{1}".format(
                 len(remaining_other), _join_tokens(_unique_tokens(remaining_other))
+            )
+        )
+    if remaining_embedded:
+        warnings.append(
+            "最终 Markdown 保留 {0} 个嵌入文件占位符（本工具不替换，请手动上传）：{1}".format(
+                len(remaining_embedded),
+                _join_tokens(_unique_tokens(remaining_embedded)),
             )
         )
     if code:
@@ -607,6 +637,8 @@ def update_special_manifest(manifest, mapping, analysis=None):
     for image in images:
         if not image.is_special:
             continue
+        if image.compatibility == COMPATIBILITY_EMBEDDED:
+            continue
         entry = image.raw
         if not isinstance(entry, dict):
             continue
@@ -633,6 +665,8 @@ def update_special_manifest(manifest, mapping, analysis=None):
 def _token_kind(token):
     if SPECIAL_PLACEHOLDER.fullmatch(token):
         return "special"
+    if EMBEDDED_PLACEHOLDER.fullmatch(token):
+        return "embedded"
     if NORMAL_PLACEHOLDER.fullmatch(token):
         return "normal"
     return "other"

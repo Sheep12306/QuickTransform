@@ -18,7 +18,7 @@ occurrence_id / placeholder
 
 普通图片的 `upload_sha256 == source_sha256`；EMF/WMF/TIFF 转换图片的 `upload_sha256` 是转换后 PNG 的哈希。浏览器扩展上传的是上传副本，因此必须用 `upload_sha256` 匹配。
 
-失败、未上传、无法匹配的图片不会占用任何 URL，后续图片也不会前移。`unsupported` / `oversized` / `conversion_failed` 图片使用特殊占位符，不进入自动替换流程。
+失败、未上传、无法匹配的图片不会占用任何 URL，后续图片也不会前移。`unsupported` / `oversized` / `conversion_failed` 图片使用特殊占位符，不进入自动替换流程。嵌入的 Word/视频/HTML/OLE 对象（`embedded`）也不参与替换，工具只提示人工在 ShowDoc 上传。
 
 ## 网页入口
 
@@ -90,6 +90,7 @@ output/final/
 | `unsupported` | manifest 标记为不支持，保留特殊占位符 |
 | `oversized` | manifest 标记为超限，保留特殊占位符 |
 | `conversion_failed` | manifest 标记为转换失败，保留特殊占位符 |
+| `embedded` | 嵌入的 Word/视频/HTML/OLE 对象，不替换，仅提醒人工上传 |
 
 `uploads` 中的 `status` 可以为 `success`、`failed`、`not_uploaded`、`unmatched`、`pending`、`interrupted` 等。工具会重新检查 `response.success`，不会仅凭 HTTP 200 或 `status=success` 判断成功。
 

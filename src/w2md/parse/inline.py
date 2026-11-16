@@ -1,7 +1,7 @@
 """Inline (run-level) content parsing."""
 
 from ..ir.nodes import Bold, Color, Highlight, Image, Italic, Text, Underline
-from ..opc.image_refs import iter_image_references
+from ..opc.image_refs import iter_image_references, iter_media_references
 from ..opc.ns import IMAGE_PLACEHOLDER_ATTR, PIC_NS, W_NS, WP_NS
 
 
@@ -98,6 +98,9 @@ def _parse_run(r_el, rels):
 
     for image in _run_images(r_el, rels):
         nodes.append(image)
+
+    for placeholder in _run_embedded_placeholders(r_el):
+        nodes.append(Text(placeholder))
     return nodes
 
 
@@ -110,6 +113,17 @@ def _run_images(r_el, rels):
         if source or placeholder:
             images.append(Image(source=source or "", alt=alt, placeholder=placeholder))
     return images
+
+
+def _run_embedded_placeholders(r_el):
+    placeholders = []
+    for element, _rid, kind in iter_media_references(r_el):
+        if kind != "embedded":
+            continue
+        placeholder = element.get(IMAGE_PLACEHOLDER_ATTR) or ""
+        if placeholder:
+            placeholders.append(placeholder)
+    return placeholders
 
 
 def _image_alt(r_el):

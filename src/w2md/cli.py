@@ -140,12 +140,14 @@ def main(argv=None):
                         )
                         print(
                             "  compatibility: supported {0}, converted {1}, oversized {2}, "
-                            "conversion_failed {3}, unsupported {4}, special {5}".format(
+                            "conversion_failed {3}, unsupported {4}, embedded {5}, "
+                            "special {6}".format(
                                 stats.get("image_supported", 0),
                                 stats.get("image_converted", 0),
                                 stats.get("image_oversized", 0),
                                 stats.get("image_conversion_failed", 0),
                                 stats.get("image_unsupported", 0),
+                                stats.get("image_embedded", 0),
                                 stats.get("image_special", 0),
                             )
                         )
@@ -344,12 +346,13 @@ def _run_apply_upload_result(args):
     )
     print(
         "兼容性: supported {0} / converted {1} / oversized {2} / "
-        "conversion_failed {3} / unsupported {4}".format(
+        "conversion_failed {3} / unsupported {4} / embedded {5}".format(
             counts.get("supported", 0),
             counts.get("converted", 0),
             counts.get("oversized", 0),
             counts.get("conversion_failed", 0),
             counts.get("unsupported", 0),
+            counts.get("embedded", 0),
         )
     )
 

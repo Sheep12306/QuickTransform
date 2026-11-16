@@ -27,9 +27,11 @@ from .image_extract import (
     COMPATIBILITY_CONVERSION_FAILED,
     COMPATIBILITY_CONVERTED,
     COMPATIBILITY_OVERSIZED,
+    COMPATIBILITY_EMBEDDED,
     COMPATIBILITY_SUPPORTED,
     COMPATIBILITY_UNSUPPORTED,
     CONVERSION_FAILED_PREFIX,
+    EMBEDDED_PREFIX,
     OVERSIZED_PREFIX,
     SPECIAL_COMPATIBILITIES,
     UNSUPPORTED_PREFIX,
@@ -85,9 +87,11 @@ SPECIAL_PLACEHOLDER_PREFIXES = {
     COMPATIBILITY_UNSUPPORTED: UNSUPPORTED_PREFIX,
     COMPATIBILITY_OVERSIZED: OVERSIZED_PREFIX,
     COMPATIBILITY_CONVERSION_FAILED: CONVERSION_FAILED_PREFIX,
+    COMPATIBILITY_EMBEDDED: EMBEDDED_PREFIX,
 }
 SPECIAL_PLACEHOLDER = re.compile(
     r"\{\{SHOWDOC_(?:UNSUPPORTED|OVERSIZED|CONVERSION_FAILED)_IMAGE_\d{6}\}\}"
+    r"|\{\{SHOWDOC_EMBEDDED_\d{6}\}\}"
 )
 
 _HTTP_URL = re.compile(r"^https?://", re.IGNORECASE)
@@ -377,6 +381,7 @@ def normalize_manifest(manifest):
         if compatibility in (
             COMPATIBILITY_UNSUPPORTED,
             COMPATIBILITY_CONVERSION_FAILED,
+            COMPATIBILITY_EMBEDDED,
         ):
             upload_path = None
         local_file = upload_path or source_path
@@ -398,6 +403,7 @@ def normalize_manifest(manifest):
         if compatibility in (
             COMPATIBILITY_UNSUPPORTED,
             COMPATIBILITY_CONVERSION_FAILED,
+            COMPATIBILITY_EMBEDDED,
         ):
             upload_sha256 = None
 
@@ -469,6 +475,7 @@ def _normalize_compatibility(value, placeholder):
         COMPATIBILITY_OVERSIZED,
         COMPATIBILITY_CONVERSION_FAILED,
         COMPATIBILITY_UNSUPPORTED,
+        COMPATIBILITY_EMBEDDED,
     ):
         return text
 
@@ -479,6 +486,8 @@ def _normalize_compatibility(value, placeholder):
         return COMPATIBILITY_OVERSIZED
     if token.startswith(CONVERSION_FAILED_PREFIX):
         return COMPATIBILITY_CONVERSION_FAILED
+    if token.startswith(EMBEDDED_PREFIX):
+        return COMPATIBILITY_EMBEDDED
 
     # Legacy manifests (before compatibility categories) keep a normal
     # placeholder even for EMF/WMF/TIFF.  Treat them as supported so old
@@ -1116,6 +1125,7 @@ def _compute_counts(analysis):
             COMPATIBILITY_OVERSIZED,
             COMPATIBILITY_CONVERSION_FAILED,
             COMPATIBILITY_UNSUPPORTED,
+            COMPATIBILITY_EMBEDDED,
         )
     }
 
@@ -1138,6 +1148,7 @@ def _compute_counts(analysis):
         "unsupported": compatibility_counts[COMPATIBILITY_UNSUPPORTED],
         "oversized": compatibility_counts[COMPATIBILITY_OVERSIZED],
         "conversion_failed": compatibility_counts[COMPATIBILITY_CONVERSION_FAILED],
+        "embedded": compatibility_counts[COMPATIBILITY_EMBEDDED],
         "converted": compatibility_counts[COMPATIBILITY_CONVERTED],
         "supported": compatibility_counts[COMPATIBILITY_SUPPORTED],
         "unexpected_upload": len(analysis.unexpected_uploads),
@@ -1161,7 +1172,9 @@ def _compute_counts(analysis):
             else sum(1 for image in normal_images if not image.in_markdown)
         ),
         "special_not_in_markdown": sum(
-            1 for image in special_images if not image.in_markdown
+            1
+            for image in special_images
+            if image.compatibility != COMPATIBILITY_EMBEDDED and not image.in_markdown
         ),
         "upload_records": len(analysis.uploads),
         "missing_entries": len(analysis.missing_entries),
@@ -1328,7 +1341,9 @@ def _decide(analysis, allow_mismatch):
     missing_special = [
         image
         for image in analysis.images
-        if image.is_special and not image.in_markdown
+        if image.is_special
+        and image.compatibility != COMPATIBILITY_EMBEDDED
+        and not image.in_markdown
     ]
     if missing_special:
         analysis.warnings.append(
@@ -1336,6 +1351,21 @@ def _decide(analysis, allow_mismatch):
                 len(missing_special),
                 "、".join(image.placeholder for image in missing_special[:5]),
                 " 等" if len(missing_special) > 5 else "",
+            )
+        )
+
+    embedded_images = [
+        image
+        for image in analysis.images
+        if image.compatibility == COMPATIBILITY_EMBEDDED
+    ]
+    if embedded_images:
+        analysis.warnings.append(
+            "manifest 中有 {0} 个嵌入对象（Word / 视频 / HTML / OLE 等），"
+            "本工具不转换、不替换，请在 ShowDoc 手动上传原文件：{1}{2}".format(
+                len(embedded_images),
+                "、".join(image.placeholder for image in embedded_images[:5]),
+                " 等" if len(embedded_images) > 5 else "",
             )
         )
 

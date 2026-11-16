@@ -345,9 +345,26 @@ class HeadingResolver:
             num_id = style_num_id
         if ilvl is None:
             ilvl = style_ilvl
+        if num_id in (None, "", "0") and self.numbering is not None and style_id:
+            linked_num_id, linked_ilvl = self.numbering.num_for_style(style_id)
+            if linked_num_id:
+                num_id = linked_num_id
+                if ilvl is None:
+                    ilvl = linked_ilvl
         if num_id in (None, "", "0"):
             num_id = None
         return num_id, str(ilvl if ilvl is not None else 0)
+
+    def numbering_ids(self, p_el):
+        """Return ``(numId, ilvl)`` for numbering display, or ``(None, 0)``."""
+
+        style_id = _paragraph_style_id(p_el)
+        num_id, ilvl = self._numbering_ids(p_el, style_id)
+        try:
+            level = int(ilvl)
+        except (TypeError, ValueError):
+            level = 0
+        return num_id, level
 
     def _has_numbering(self, p_el, style_id):
         num_id, _ = self._numbering_ids(p_el, style_id)
@@ -393,14 +410,22 @@ class HeadingResolver:
         except ValueError:
             numeric_ilvl = 0
         if numeric_ilvl > 0:
-            return HeadingMatch(
-                level=numeric_ilvl + 1,
-                source="numbering",
-                detail="numId={0} ilvl={1} format={2}".format(
-                    num_id, ilvl, num_format or "unknown"
-                ),
-                font_size=font_size,
-            )
+            # Nested numbering is used by both chapter headings and ordinary
+            # multi-level lists.  Only promote it when the text also looks and
+            # reads like a heading; otherwise it stays a list item and keeps
+            # its number prefix.
+            if _looks_like_heading_text(text) and (
+                bold or font_size >= self.body_size * 1.2
+            ):
+                return HeadingMatch(
+                    level=numeric_ilvl + 1,
+                    source="numbering",
+                    detail="numId={0} ilvl={1} format={2}".format(
+                        num_id, ilvl, num_format or "unknown"
+                    ),
+                    font_size=font_size,
+                )
+            return None
 
         if _looks_like_heading_text(text) and (
             bold or font_size >= self.body_size * 1.2

@@ -1,5 +1,7 @@
 """Word document.xml traversal: paragraphs and headings to IR blocks."""
 
+import re
+
 from ..ir.nodes import (
     Bold,
     Color,
@@ -12,13 +14,25 @@ from ..ir.nodes import (
     Text,
     Underline,
 )
-from ..opc.ns import W_NS
+from ..opc.ns import IMAGE_PLACEHOLDER_ATTR, W_NS
 from . import inline
 from .headings import HeadingResolver
+from .numbering import NumberingState
 from .tables import parse_table
 
 
 W = "{%s}" % W_NS
+
+# Text that already carries a typed number / bullet must not get a second
+# automatic prefix.
+_EXISTING_PREFIX = re.compile(
+    r"^\s*(?:"
+    r"\d+(?:[.．]\d+)*[.．、)）]"
+    r"|[（(]\d+[)）]"
+    r"|[一二三四五六七八九十百]+[、.．]"
+    r"|[\-•●○■□◆◇▪➢✓]"
+    r")\s*"
+)
 
 
 def parse_document(doc_root, styles, report, rels=None, numbering=None):
@@ -27,20 +41,28 @@ def parse_document(doc_root, styles, report, rels=None, numbering=None):
         return Document()
 
     resolver = HeadingResolver(doc_root, styles, numbering)
+    state = NumberingState(numbering)
     blocks = []
     for child in body:
         if child.tag == W + "p":
-            blocks.extend(_parse_paragraph(child, rels, resolver, report))
+            blocks.extend(_parse_paragraph(child, rels, resolver, report, state))
         elif child.tag == W + "tbl":
             blocks.append(parse_table(child, rels))
+        elif child.tag == W + "altChunk" and child.get(IMAGE_PLACEHOLDER_ATTR):
+            blocks.append(Paragraph([Text(child.get(IMAGE_PLACEHOLDER_ATTR))]))
     return Document(blocks=blocks)
 
 
-def _parse_paragraph(p_el, rels, resolver, report):
+def _parse_paragraph(p_el, rels, resolver, report, state):
     match = resolver.resolve(p_el)
     children = inline.parse_paragraph_runs(p_el, rels)
+    is_heading = match is not None and match.level > 0
 
-    if match is None or match.level <= 0:
+    prefix = _numbering_prefix(p_el, resolver, state, children, is_heading)
+    if prefix:
+        children = [Text(prefix)] + children
+
+    if not is_heading:
         if match is not None:
             _report_conflicts(match, _inline_text(children), report)
         return [Paragraph(children)]
@@ -48,6 +70,27 @@ def _parse_paragraph(p_el, rels, resolver, report):
     text = _inline_text(children)
     _report_heading(match, text, report)
     return [Heading(level=match.level, children=children)]
+
+
+def _numbering_prefix(p_el, resolver, state, children, is_heading):
+    if state is None or state.table is None:
+        return ""
+    text = _inline_text(children)
+    if not text or _EXISTING_PREFIX.match(text):
+        return ""
+
+    num_id, ilvl = resolver.numbering_ids(p_el)
+    label = state.label(num_id, ilvl)
+    if not label:
+        return ""
+
+    if is_heading:
+        return label + " "
+    # Full-width indent keeps nested list levels visible without turning the
+    # line into a Markdown code block.  NBSP after the label prevents Markdown
+    # from renumbering ordered lists, so the number Word showed is preserved.
+    indent = "　" * min(max(ilvl, 0), 4)
+    return indent + label + " "
 
 
 def _report_heading(match, text, report):
