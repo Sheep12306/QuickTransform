@@ -6,6 +6,9 @@
   <title>QuickTransform - Markdown 阅读器</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="word2image.css">
+  <link rel="stylesheet" href="placeholder_replace.css">
+  <link rel="stylesheet" href="special_images.css">
   <link rel="stylesheet" href="mdreader.css">
 </head>
 <body data-theme="light" data-accent="green">
@@ -53,6 +56,7 @@
       <div class="toolbar">
         <div class="file" id="report-file"></div>
         <div class="toolbar-actions">
+          <button class="pane-head-btn check-toggle" id="check-toggle" type="button" aria-expanded="false">检查与修正</button>
           <button class="icon-btn" id="copy-btn" type="button" title="复制 Markdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
           <button class="icon-btn" id="reset-btn" type="button" title="重新选择"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         </div>
@@ -77,9 +81,99 @@
         </div>
       </div>
     </section>
+
+    <section class="check-panel hidden" id="check-panel">
+      <header class="check-panel-head">
+        <div>
+          <h3>特殊图片检查与修正</h3>
+          <span id="check-sub">导入 manifest 后，可检查并补齐 unsupported / oversized / conversion_failed 图片</span>
+        </div>
+        <label class="file-pick">
+          导入 manifest.json
+          <input type="file" id="manifest-file" accept=".json,application/json" hidden>
+        </label>
+      </header>
+
+      <div class="check-manifest-row is-drop-target" id="manifest-card" data-drop-input="manifest-file">
+        <span class="check-manifest-name" id="manifest-name">未导入 manifest（检查功能不可用）</span>
+        <span class="check-manifest-hint">manifest 只在本机解析，不会上传</span>
+      </div>
+
+      <div class="special-summary" id="special-summary">
+        <span>共 <b id="count-special">0</b> 张特殊图片</span>
+        <span>正文中 <b id="count-in-markdown">0</b> 张</span>
+        <span>待处理 <b id="count-pending">0</b> 张</span>
+      </div>
+
+      <div class="check-grid">
+        <div class="check-item idle" id="check-normal">
+          <span class="check-name">普通占位符残留</span>
+          <b class="check-value" id="check-normal-value">—</b>
+          <span class="check-state" id="check-normal-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-pending">
+          <span class="check-name">特殊图片待处理</span>
+          <b class="check-value" id="check-pending-value">—</b>
+          <span class="check-state" id="check-pending-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-url">
+          <span class="check-name">URL 有效性</span>
+          <b class="check-value" id="check-url-value">—</b>
+          <span class="check-state" id="check-url-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-occurrence">
+          <span class="check-name">occurrence_id 唯一性</span>
+          <b class="check-value" id="check-occurrence-value">—</b>
+          <span class="check-state" id="check-occurrence-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-unknown">
+          <span class="check-name">清单外特殊占位符</span>
+          <b class="check-value" id="check-unknown-value">—</b>
+          <span class="check-state" id="check-unknown-state">等待检查</span>
+        </div>
+        <div class="check-item idle" id="check-final">
+          <span class="check-name">最终占位符残留</span>
+          <b class="check-value" id="check-final-value">—</b>
+          <span class="check-state" id="check-final-state">生成后检查</span>
+        </div>
+      </div>
+
+      <ul class="message-list error-list hidden" id="error-list"></ul>
+      <ul class="message-list warning-list hidden" id="warning-list"></ul>
+
+      <div class="special-list" id="special-list">
+        <p class="empty-hint">导入 manifest.json 后，这里会列出 unsupported / oversized / conversion_failed 图片。</p>
+      </div>
+
+      <div class="replace-actions check-actions">
+        <button class="quick-btn" id="analyze-btn" type="button">重新检查</button>
+        <button class="quick-btn" id="generate-btn" type="button" disabled>生成最终 Markdown</button>
+        <span class="step-hint" id="check-hint">填写图片 URL 后会自动检查</span>
+        <button class="ghost-btn" id="clear-check" type="button">清空检查</button>
+      </div>
+
+      <section class="result-panel check-result hidden" id="result-panel">
+        <div class="panel-head">
+          <h3>修正后的 Markdown</h3>
+          <div class="result-actions">
+            <button class="quick-btn copy-primary" id="copy-result" type="button">复制 Markdown</button>
+            <button class="ghost-btn" id="download-md" type="button">下载 .md</button>
+            <button class="ghost-btn" id="apply-result" type="button">应用到阅读器</button>
+            <button class="ghost-btn" id="download-manifest" type="button">下载更新后的 manifest</button>
+          </div>
+        </div>
+        <textarea id="result-text" readonly spellcheck="false"></textarea>
+        <p class="result-note" id="result-note"></p>
+      </section>
+    </section>
   </main>
 
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="api.js"></script>
   <script src="preview.js"></script>
+  <script src="file_drop.js"></script>
   <script src="mdreader.js"></script>
+  <script src="mdreader_check.js"></script>
 </body>
 </html>

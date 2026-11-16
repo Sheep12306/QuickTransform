@@ -41,18 +41,18 @@
       <span class="mode-sep"></span>
       <span class="mode-label">图片</span>
       <div class="segmented" id="asset-mode" role="group" aria-label="图片处理方式">
-        <button class="seg active" type="button" data-value="folder">文件夹</button>
+        <button class="seg active" type="button" data-value="placeholder">占位符</button>
+        <button class="seg" type="button" data-value="folder">文件夹</button>
         <button class="seg" type="button" data-value="base64">内嵌</button>
-        <button class="seg" type="button" data-value="placeholder">占位符</button>
       </div>
       <div class="help-wrap">
         <button class="help-btn" type="button" aria-label="图片模式说明" aria-describedby="asset-help-tip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a2.9 2.9 0 0 1 5.8 0c0 2-2.9 2.5-2.9 4"/><path d="M12 17h.01"/></svg>
         </button>
         <div class="help-tip" id="asset-help-tip" role="tooltip">
+          <span class="help-tip-item"><strong>占位符（默认）</strong>：按正文顺序把原图保存到 <code>assets/original/</code>，上传副本保存到 <code>assets/upload/</code>（EMF/WMF 自动转 PNG），Markdown 写入 <code>{{SHOWDOC_IMAGE_000001}}</code> 形式占位符，并生成含 SHA-256 和兼容性分类的 <code>manifest.json</code>。不支持/超限/转换失败的图片保留特殊占位符；嵌入的 Word/视频/HTML 对象生成 <code>{{SHOWDOC_EMBEDDED_000001}}</code> 占位符，需人工在 ShowDoc 上传。</span>
           <span class="help-tip-item"><strong>文件夹</strong>：图片单独保存，Markdown 引用相对路径，源码短、便于编辑。</span>
           <span class="help-tip-item"><strong>内嵌</strong>：图片转成 Base64 直接写进 Markdown，一个文件即可带走，但源码会很长。</span>
-          <span class="help-tip-item"><strong>占位符</strong>：按正文顺序把原图保存到 <code>assets/original/</code>，上传副本保存到 <code>assets/upload/</code>（EMF/WMF 自动转 PNG），Markdown 写入 <code>{{SHOWDOC_IMAGE_000001}}</code> 形式占位符，并生成含 SHA-256 和兼容性分类的 <code>manifest.json</code>。不支持/超限/转换失败的图片保留特殊占位符；嵌入的 Word/视频/HTML 对象生成 <code>{{SHOWDOC_EMBEDDED_000001}}</code> 占位符，需人工在 ShowDoc 上传。</span>
         </div>
       </div>
     </div>

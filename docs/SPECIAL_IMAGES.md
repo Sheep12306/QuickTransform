@@ -27,25 +27,27 @@ Word / 图片提取
 
 ## 网页入口
 
+已合并进 Markdown 阅读器：
+
 ```text
-http://127.0.0.1:8000/special_images.html
+http://127.0.0.1:8000/mdreader.html
 ```
 
-或从首页点击「特殊图片处理」。
+打开 Markdown 后，点击工具栏「检查与修正」，再导入 `manifest.json`。旧的 `special_images.html` 会自动跳转到阅读器。
 
 ## 页面操作
 
-1. 在左侧拖入 / 选择 `upload_result` 生成的 Markdown，或直接粘贴。普通图片应当已经回填完成。
-2. 在右侧拖入 / 选择同一批图片的 `manifest.json`。
-3. 右侧按正文顺序列出 manifest 中的特殊图片：
+1. 在阅读器中打开 `upload_result` 生成的 Markdown（也可以直接在源码框粘贴）。普通图片应当已经回填完成。
+2. 在「检查与修正」面板中导入同一批图片的 `manifest.json`。
+3. 面板按正文顺序列出 manifest 中的特殊图片：
    - 序号、`occurrence_id`、占位符
    - 兼容性分类（不支持格式 / 图片超限 / 转换失败）
    - 原始文件名、首次出现行号、出现次数
    - 每项独立的 ShowDoc URL 输入框
-4. 点击任意条目（或「定位」按钮），左侧 Markdown 会滚动到对应行并选中、高亮该占位符。
+4. 点击任意条目（或「定位」按钮），阅读器源码会滚动到对应行并选中、高亮该占位符。
 5. 逐张填写 URL。输入后自动重新检查，`待处理` 数量实时更新。
 6. 全部填写且检查通过后，点击「生成最终 Markdown」。
-7. 下载最终 Markdown、更新后的 manifest 和检查报告。
+7. 复制或下载修正后的 Markdown，也可以一键「应用到阅读器」；还可以下载更新后的 manifest。
 
 ## 检查项
 

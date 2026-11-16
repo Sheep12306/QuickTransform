@@ -2,16 +2,16 @@
   var markdownFile = document.getElementById("markdown-file");
   var uploadFile = document.getElementById("upload-file");
   var manifestFile = document.getElementById("manifest-file");
-  var imageFiles = document.getElementById("image-files");
   var markdownText = document.getElementById("markdown-text");
+  var uploadText = document.getElementById("upload-text");
+  var manifestText = document.getElementById("manifest-text");
   var markdownName = document.getElementById("markdown-name");
   var uploadName = document.getElementById("upload-name");
   var uploadSummaryList = document.getElementById("upload-summary-list");
   var manifestName = document.getElementById("manifest-name");
-  var imageCount = document.getElementById("image-count");
   var analyzeBtn = document.getElementById("analyze-btn");
   var generateBtn = document.getElementById("generate-btn");
-  var exportCsv = document.getElementById("export-csv");
+  var stepHint = document.getElementById("step-hint");
   var clearBtn = document.getElementById("clear-btn");
   var allowMismatch = document.getElementById("allow-mismatch");
   var analysisPanel = document.getElementById("analysis-panel");
@@ -25,17 +25,10 @@
   var copyResult = document.getElementById("copy-result");
   var downloadMd = document.getElementById("download-md");
   var downloadCsv = document.getElementById("download-csv");
-  var downloadReport = document.getElementById("download-report");
-  var downloadHtml = document.getElementById("download-html");
   var toastEl = document.getElementById("toast");
 
-  var MAX_THUMBNAILS = 120;
-  var CSV_COLUMNS = [
-    "序号", "occurrence_id", "占位符", "原始文件名", "原始路径",
-    "上传文件名", "上传路径", "大小", "SHA-256", "原始SHA-256",
-    "上传SHA-256", "章节", "上下文前置文字", "上下文后置文字",
-    "状态", "失败原因", "是否在Markdown中", "行号"
-  ];
+  var MANIFEST_HINT = "未提供 manifest：仍可替换，但无法校验文档一致性，缺失清单也不完整";
+  var STEP_HINT = "先点击「一键替换」检查匹配结果，确认后才能生成";
 
   var state = {
     markdownFilename: "",
@@ -45,8 +38,8 @@
     manifest: null,
     analysis: null,
     result: null,
-    imageUrls: {},
-    filesByName: {},
+    uploadTimer: null,
+    manifestTimer: null,
     toastTimer: null
   };
 
@@ -76,10 +69,11 @@
     state.analysis = null;
     state.result = null;
     generateBtn.disabled = true;
-    exportCsv.disabled = true;
     hide(analysisPanel);
     hide(mappingPanel);
     hide(resultPanel);
+    stepHint.textContent = STEP_HINT;
+    stepHint.classList.remove("ready");
   }
 
   function payload() {
@@ -118,7 +112,7 @@
     }
 
     analyzeBtn.disabled = true;
-    analyzeBtn.textContent = "正在校验…";
+    analyzeBtn.textContent = "正在替换…";
     postJson("/api/upload-result/analyze", payload())
       .then(function (response) {
         if (!response.ok) {
@@ -129,17 +123,17 @@
         hide(resultPanel);
         renderAnalysis();
         toast(
-          "校验完成：成功 " + number(response.data.counts && response.data.counts.success) +
+          "检查完成：成功 " + number(response.data.counts && response.data.counts.success) +
           "，失败 " + number(response.data.counts && response.data.counts.failed) +
           "，未上传 " + number(response.data.counts && response.data.counts.not_uploaded)
         );
       })
       .catch(function (error) {
-        toast("校验失败：" + (error.message || error), true);
+        toast("替换失败：" + (error.message || error), true);
       })
       .then(function () {
         analyzeBtn.disabled = false;
-        analyzeBtn.textContent = "预览替换结果";
+        analyzeBtn.textContent = "① 一键替换";
       });
   }
 
@@ -189,7 +183,13 @@
     show(analysisPanel);
     show(mappingPanel);
     generateBtn.disabled = !analysis.can_generate;
-    exportCsv.disabled = false;
+    if (analysis.can_generate) {
+      stepHint.textContent = "检查通过，可以生成最终 Markdown";
+      stepHint.classList.add("ready");
+    } else {
+      stepHint.textContent = "检查未通过，请先处理下方错误信息";
+      stepHint.classList.remove("ready");
+    }
   }
 
   function renderMessages(id, messages) {
@@ -218,7 +218,7 @@
     if (!images.length) {
       var emptyRow = document.createElement("tr");
       var cell = document.createElement("td");
-      cell.colSpan = 6;
+      cell.colSpan = 5;
       cell.textContent = "没有可处理的图片";
       emptyRow.appendChild(cell);
       mappingBody.appendChild(emptyRow);
@@ -253,13 +253,6 @@
     var orderCell = document.createElement("td");
     orderCell.textContent = "#" + (record.sequence != null ? String(record.sequence).padStart(6, "0") : "?");
     row.appendChild(orderCell);
-
-    var thumbCell = document.createElement("td");
-    var empty = document.createElement("div");
-    empty.className = "mapping-thumb-empty";
-    empty.textContent = "清单外";
-    thumbCell.appendChild(empty);
-    row.appendChild(thumbCell);
 
     var textCell = document.createElement("td");
     textCell.className = "text-cell";
@@ -303,25 +296,6 @@
       ? "#" + String(image.sequence).padStart(6, "0")
       : "#";
     row.appendChild(orderCell);
-
-    var thumbCell = document.createElement("td");
-    var thumbUrl = image.file_name ? state.imageUrls[image.file_name] : null;
-    if (!thumbUrl && image.local_file) {
-      thumbUrl = state.imageUrls[basename(image.local_file)];
-    }
-    if (thumbUrl) {
-      var img = document.createElement("img");
-      img.className = "mapping-thumb";
-      img.src = thumbUrl;
-      img.alt = image.alt_text || "";
-      thumbCell.appendChild(img);
-    } else {
-      var empty = document.createElement("div");
-      empty.className = "mapping-thumb-empty";
-      empty.textContent = "无缩略图";
-      thumbCell.appendChild(empty);
-    }
-    row.appendChild(thumbCell);
 
     var textCell = document.createElement("td");
     textCell.className = "text-cell";
@@ -378,20 +352,56 @@
     }
     row.appendChild(urlCell);
 
-    var contextCell = document.createElement("td");
-    contextCell.className = "context-cell";
+    row.appendChild(buildLocateCell(image));
+    return row;
+  }
+
+  function buildLocateCell(image) {
+    var cell = document.createElement("td");
+    cell.className = "context-cell";
     var section = document.createElement("div");
     section.className = "section";
     section.textContent = image.section || "未识别章节";
+    section.title = image.section || "";
+
     var context = document.createElement("div");
     context.className = "context";
-    context.textContent = (image.context_before ? "…" + image.context_before : "") +
-      (image.context_after ? "【图】" + image.context_after + "…" : "");
-    contextCell.appendChild(section);
-    contextCell.appendChild(context);
-    row.appendChild(contextCell);
+    context.title = "复制这一行到原文中搜索，可快速定位图片";
+    var before = lastSentence(image.context_before);
+    var after = firstSentence(image.context_after);
+    if (before) {
+      context.appendChild(document.createTextNode("…" + before + " "));
+    }
+    var marker = document.createElement("code");
+    marker.className = "context-marker";
+    marker.textContent = image.placeholder || "【图片】";
+    context.appendChild(marker);
+    if (after) {
+      context.appendChild(document.createTextNode(" " + after + "…"));
+    }
+    if (!before && !after) {
+      context.textContent = image.in_markdown
+        ? "正文中没有可用的上下文"
+        : "Markdown 正文中没有该占位符";
+    }
 
-    return row;
+    cell.appendChild(section);
+    cell.appendChild(context);
+    return cell;
+  }
+
+  function lastSentence(text) {
+    var value = String(text || "").replace(/\s+/g, " ").trim();
+    if (!value) { return ""; }
+    var match = value.match(/([^。！？!?；;]+[。！？!?；;]?)\s*$/);
+    return (match ? match[1] : value).trim();
+  }
+
+  function firstSentence(text) {
+    var value = String(text || "").replace(/\s+/g, " ").trim();
+    if (!value) { return ""; }
+    var match = value.match(/^.*?[。！？!?；;]/);
+    return (match ? match[0] : value).trim();
   }
 
   function statusClass(image) {
@@ -428,13 +438,9 @@
     var body = payload();
     body.confirmed = !!confirmed;
     generateBtn.disabled = true;
-    generateBtn.textContent = confirmed ? "正在生成…" : "正在准备缩略图…";
+    generateBtn.textContent = confirmed ? "正在生成…" : "正在准备…";
 
-    buildThumbnails()
-      .then(function (thumbnails) {
-        body.thumbnails = thumbnails;
-        return postJson("/api/upload-result/generate", body);
-      })
+    postJson("/api/upload-result/generate", body)
       .then(function (response) {
         var data = response.data || {};
         if (response.status === 409 || (data.requires_confirmation && !confirmed)) {
@@ -477,7 +483,7 @@
         toast("生成失败：" + (error.message || error), true);
       })
       .then(function () {
-        generateBtn.textContent = "生成最终 Markdown";
+        generateBtn.textContent = "② 生成最终 Markdown";
         generateBtn.disabled = !state.analysis || !state.analysis.can_generate;
       });
   }
@@ -496,83 +502,11 @@
     resultNote.textContent = notes.join("；");
     downloadMd.disabled = !(data.artifacts && data.artifacts.markdown);
     downloadCsv.disabled = !(data.artifacts && data.artifacts.csv);
-    downloadReport.disabled = !(data.artifacts && data.artifacts.report);
-    downloadHtml.disabled = !(data.artifacts && data.artifacts.html);
+    stepHint.textContent = "已生成最终 Markdown，可以复制或下载";
+    stepHint.classList.add("ready");
     show(resultPanel);
     resultPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
-
-  // ---------------------------------------------------------------------
-  // Thumbnails for missing_images.html
-
-  function missingImages() {
-    if (!state.analysis) { return []; }
-    return (state.analysis.images || []).filter(function (image) {
-      if (image.is_special) { return true; }
-      return image.in_target && image.upload_status !== "success";
-    });
-  }
-
-  function buildThumbnails() {
-    var missing = missingImages();
-    if (!missing.length) { return Promise.resolve({}); }
-    var limited = missing.slice(0, MAX_THUMBNAILS);
-    if (missing.length > MAX_THUMBNAILS) {
-      toast("缺失图片较多，missing_images.html 只嵌入前 " + MAX_THUMBNAILS + " 张缩略图", true);
-    }
-
-    return Promise.all(limited.map(function (image) {
-      var file = state.filesByName[image.file_name || basename(image.local_file)];
-      if (!file) { return Promise.resolve(null); }
-      return downscale(file).then(function (dataUrl) {
-        return dataUrl ? { image: image, dataUrl: dataUrl } : null;
-      }).catch(function () { return null; });
-    })).then(function (items) {
-      var thumbnails = {};
-      items.forEach(function (item) {
-        if (!item) { return; }
-        if (item.image.placeholder) { thumbnails[item.image.placeholder] = item.dataUrl; }
-        if (item.image.file_name) { thumbnails[item.image.file_name] = item.dataUrl; }
-      });
-      return thumbnails;
-    });
-  }
-
-  function downscale(file) {
-    if (file.type === "image/emf" || file.type === "image/wmf" || file.type === "image/tiff") {
-      return Promise.resolve(null);
-    }
-    return new Promise(function (resolve) {
-      var url = URL.createObjectURL(file);
-      var image = new Image();
-      image.onload = function () {
-        try {
-          var max = 320;
-          var scale = Math.min(1, max / Math.max(image.naturalWidth, image.naturalHeight));
-          var canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-          var context = canvas.getContext("2d");
-          context.fillStyle = "#ffffff";
-          context.fillRect(0, 0, canvas.width, canvas.height);
-          context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/jpeg", 0.72));
-        } catch (error) {
-          resolve(null);
-        } finally {
-          URL.revokeObjectURL(url);
-        }
-      };
-      image.onerror = function () {
-        URL.revokeObjectURL(url);
-        resolve(null);
-      };
-      image.src = url;
-    });
-  }
-
-  // ---------------------------------------------------------------------
-  // Exports
 
   function downloadText(filename, text, mime) {
     var blob = new Blob([text], { type: mime || "text/plain;charset=utf-8" });
@@ -586,104 +520,13 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
-  function artifact(key, fallbackName) {
-    if (state.result && state.result.artifacts && state.result.artifacts[key]) {
-      return state.result.artifacts[key];
-    }
-    return null;
-  }
-
   function downloadArtifact(key, fallbackName) {
-    var item = artifact(key);
+    var item = state.result && state.result.artifacts && state.result.artifacts[key];
     if (!item) {
       toast("请先生成最终 Markdown", true);
       return;
     }
     downloadText(item.filename || fallbackName, item.content, item.mime);
-  }
-
-  function exportMissingCsv() {
-    var item = artifact("csv");
-    if (item) {
-      downloadText(item.filename, item.content, item.mime);
-      return;
-    }
-    if (!state.analysis) {
-      toast("请先预览替换结果", true);
-      return;
-    }
-    var rows = csvRows();
-    downloadText("missing_images.csv", csvText(rows), "text/csv;charset=utf-8");
-  }
-
-  function csvRows() {
-    var rows = [];
-    (state.analysis.images || []).forEach(function (image) {
-      if (!image.is_special && (!image.in_target || image.upload_status === "success")) {
-        return;
-      }
-      rows.push({
-        "序号": image.sequence != null ? image.sequence : "",
-        "occurrence_id": image.occurrence_id || "",
-        "占位符": image.placeholder || "",
-        "原始文件名": image.source_file_name || "",
-        "原始路径": image.source_file || "",
-        "上传文件名": image.upload_file_name || "",
-        "上传路径": image.upload_file || "",
-        "大小": image.size != null ? image.size : "",
-        "SHA-256": image.upload_sha256 || image.source_sha256 || image.sha256 || "",
-        "原始SHA-256": image.source_sha256 || image.sha256 || "",
-        "上传SHA-256": image.upload_sha256 || "",
-        "章节": image.section || "",
-        "上下文前置文字": image.context_before || "",
-        "上下文后置文字": image.context_after || "",
-        "状态": image.upload_status || "",
-        "失败原因": image.reason || image.compatibility_reason || "",
-        "是否在Markdown中": image.in_markdown ? "是" : "否",
-        "行号": image.line != null ? image.line : ""
-      });
-    });
-    (state.analysis.unexpected_uploads || []).forEach(function (record) {
-      rows.push({
-        "序号": "",
-        "occurrence_id": record.occurrence_id || "",
-        "占位符": record.placeholder || "",
-        "原始文件名": record.file_name || "",
-        "原始路径": "",
-        "上传文件名": "",
-        "上传路径": "",
-        "大小": "",
-        "SHA-256": record.sha256 || "",
-        "原始SHA-256": record.sha256 || "",
-        "上传SHA-256": record.sha256 || "",
-        "章节": "",
-        "上下文前置文字": "",
-        "上下文后置文字": "",
-        "状态": "unexpected_upload",
-        "失败原因": record.reason || record.error || "清单外的上传记录",
-        "是否在Markdown中": "",
-        "行号": ""
-      });
-    });
-    return rows;
-  }
-
-  function csvText(rows) {
-    var lines = [CSV_COLUMNS.map(csvCell).join(",")];
-    rows.forEach(function (row) {
-      lines.push(CSV_COLUMNS.map(function (column) {
-        return csvCell(row[column]);
-      }).join(","));
-    });
-    return "﻿" + lines.join("\r\n") + "\r\n";
-  }
-
-  function csvCell(value) {
-    var text = value == null ? "" : String(value);
-    if (/[",\r\n]/.test(text)) {
-      return '"' + text.replace(/"/g, '""') + '"';
-    }
-    return text;
   }
 
   function copyResultText() {
@@ -699,7 +542,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Loading and reset
+  // Input loading
 
   function renderUploadSummary(data) {
     uploadSummaryList.innerHTML = "";
@@ -723,38 +566,85 @@
     });
   }
 
-  function clearImages() {
-    Object.keys(state.imageUrls).forEach(function (name) {
-      URL.revokeObjectURL(state.imageUrls[name]);
-    });
-    state.imageUrls = {};
-    state.filesByName = {};
+  function setUploadResult(parsed, label) {
+    state.uploadResult = parsed;
+    state.uploadFilename = label || "";
+    renderUploadSummary(parsed);
+    resetAnalysis();
+  }
+
+  function clearUploadResult(message) {
+    state.uploadResult = null;
+    state.uploadFilename = "";
+    uploadSummaryList.innerHTML = "";
+    uploadName.textContent = message || "未导入上传记录";
+    resetAnalysis();
+  }
+
+  function applyUploadText(text, label) {
+    if (!text.trim()) {
+      clearUploadResult("未导入上传记录");
+      return;
+    }
+    var parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (error) {
+      clearUploadResult("JSON 解析失败：" + (error.message || error));
+      return;
+    }
+    uploadName.textContent = label || "已粘贴 upload_result.json";
+    setUploadResult(parsed, label || "粘贴的 upload_result.json");
+  }
+
+  function setManifest(parsed, label) {
+    state.manifest = parsed;
+    state.manifestFilename = label || "";
+    var count = parsed && Array.isArray(parsed.images) ? parsed.images.length : 0;
+    manifestName.textContent = "已加载：" + (label || "manifest.json") +
+      "（" + count + " 张图片）";
+    resetAnalysis();
+  }
+
+  function clearManifest(message) {
+    state.manifest = null;
+    state.manifestFilename = "";
+    manifestName.textContent = message || MANIFEST_HINT;
+    resetAnalysis();
+  }
+
+  function applyManifestText(text, label) {
+    if (!text.trim()) {
+      clearManifest();
+      return;
+    }
+    var parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (error) {
+      clearManifest("manifest.json 解析失败：" + (error.message || error));
+      return;
+    }
+    setManifest(parsed, label || "粘贴的 manifest.json");
   }
 
   function clearAll() {
     markdownFile.value = "";
     uploadFile.value = "";
     manifestFile.value = "";
-    imageFiles.value = "";
     markdownText.value = "";
+    uploadText.value = "";
+    manifestText.value = "";
     markdownName.textContent = "";
-    uploadName.textContent = "";
     uploadSummaryList.innerHTML = "";
-    manifestName.textContent = "未上传 manifest（无法交叉校验与生成完整缺失清单）";
-    imageCount.textContent = "未选择图片，缺失清单没有缩略图";
+    uploadName.textContent = "未导入上传记录";
+    manifestName.textContent = MANIFEST_HINT;
     state.markdownFilename = "";
     state.uploadFilename = "";
     state.manifestFilename = "";
     state.uploadResult = null;
     state.manifest = null;
-    clearImages();
     resetAnalysis();
-  }
-
-  function basename(path) {
-    if (!path) { return ""; }
-    var parts = String(path).replace(/\\/g, "/").split("/");
-    return parts[parts.length - 1];
   }
 
   function number(value) {
@@ -776,18 +666,8 @@
     if (!uploadFile.files.length) { return; }
     var file = uploadFile.files[0];
     readTextFile(file, function (text) {
-      try {
-        state.uploadResult = JSON.parse(text);
-        state.uploadFilename = file.name;
-        uploadName.textContent = "已加载：" + file.name;
-        renderUploadSummary(state.uploadResult);
-        resetAnalysis();
-      } catch (error) {
-        state.uploadResult = null;
-        uploadName.textContent = "upload_result.json 解析失败";
-        uploadSummaryList.innerHTML = "";
-        toast("upload_result.json 解析失败：" + (error.message || error), true);
-      }
+      uploadText.value = text;
+      applyUploadText(text, file.name);
     });
   });
 
@@ -795,31 +675,25 @@
     if (!manifestFile.files.length) { return; }
     var file = manifestFile.files[0];
     readTextFile(file, function (text) {
-      try {
-        state.manifest = JSON.parse(text);
-        state.manifestFilename = file.name;
-        var count = (state.manifest.images || []).length;
-        manifestName.textContent = "已加载：" + file.name + "（" + count + " 张图片）";
-        resetAnalysis();
-      } catch (error) {
-        state.manifest = null;
-        manifestName.textContent = "manifest.json 解析失败";
-        toast("manifest.json 解析失败", true);
-      }
+      manifestText.value = text;
+      applyManifestText(text, file.name);
     });
   });
 
-  imageFiles.addEventListener("change", function () {
-    clearImages();
-    var files = Array.from(imageFiles.files || []);
-    files.forEach(function (file) {
-      state.filesByName[file.name] = file;
-      state.imageUrls[file.name] = URL.createObjectURL(file);
-    });
-    imageCount.textContent = files.length
-      ? "已选择 " + files.length + " 张图片"
-      : "未选择图片，缺失清单没有缩略图";
-    if (state.analysis) { renderTable(state.analysis); }
+  uploadText.addEventListener("input", function () {
+    if (state.uploadTimer) { clearTimeout(state.uploadTimer); }
+    state.uploadTimer = setTimeout(function () {
+      state.uploadTimer = null;
+      applyUploadText(uploadText.value, "");
+    }, 520);
+  });
+
+  manifestText.addEventListener("input", function () {
+    if (state.manifestTimer) { clearTimeout(state.manifestTimer); }
+    state.manifestTimer = setTimeout(function () {
+      state.manifestTimer = null;
+      applyManifestText(manifestText.value, "");
+    }, 520);
   });
 
   markdownText.addEventListener("input", resetAnalysis);
@@ -831,7 +705,6 @@
 
   analyzeBtn.addEventListener("click", analyze);
   generateBtn.addEventListener("click", function () { requestGenerate(false); });
-  exportCsv.addEventListener("click", exportMissingCsv);
   clearBtn.addEventListener("click", clearAll);
   copyResult.addEventListener("click", copyResultText);
 
@@ -840,11 +713,5 @@
   });
   downloadCsv.addEventListener("click", function () {
     downloadArtifact("csv", "missing_images.csv");
-  });
-  downloadReport.addEventListener("click", function () {
-    downloadArtifact("report", "replacement_report.json");
-  });
-  downloadHtml.addEventListener("click", function () {
-    downloadArtifact("html", "missing_images.html");
   });
 })();

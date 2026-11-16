@@ -135,6 +135,16 @@ body {
 }
 .quick-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
 .quick-btn:active { background: var(--accent-active); transform: none; }
+.quick-btn:disabled,
+.quick-btn:disabled:hover,
+.quick-btn:disabled:active {
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .help-wrap { position: relative; display: inline-flex; }
 .help-btn {

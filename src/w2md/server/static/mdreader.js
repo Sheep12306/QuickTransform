@@ -131,6 +131,7 @@
       renderFile(current.markdown);
       show(result);
       fitPanes();
+      document.dispatchEvent(new CustomEvent("qt:reader-file-loaded"));
     };
     reader.onerror = function () {
       showError("读取文件失败，请确认文件编码为 UTF-8");

@@ -26,7 +26,7 @@
 
   var current = { filename: "", markdown: "", images: [], downloadUrl: null };
   var currentFile = null;
-  var assetValue = "folder";
+  var assetValue = "placeholder";
   var syncBlocks = [];
 
   function show(el) { el.classList.remove("hidden"); }

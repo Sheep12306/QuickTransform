@@ -24,12 +24,20 @@
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
-.gallery-summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.gallery-summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0; flex: 1 1 260px; }
 .gallery-summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42vw; }
 .gallery-summary span { color: var(--muted); font-size: 13px; }
 
-.gallery-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gallery-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
 .gallery-actions .quick-btn { margin-left: 0; }
+.action-divider { width: 1px; align-self: stretch; min-height: 22px; background: var(--border); margin: 0 2px; }
 .format-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .format-filter select {
   border: 1px solid var(--border-strong);
@@ -39,7 +47,12 @@
   padding: 6px 10px;
   font-size: 13px;
   cursor: pointer;
+  transition: border-color .15s ease;
 }
+/* The global :focus-visible outline showed up as an odd green frame when the
+   native dropdown was opened. Keep a quiet border-only focus cue instead. */
+.format-filter select:focus,
+.format-filter select:focus-visible { outline: none; box-shadow: none; border-color: var(--muted); }
 .format-filter select:disabled { opacity: .45; cursor: not-allowed; }
 .select-all { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
 .select-all input { width: 16px; height: 16px; accent-color: var(--accent); }
@@ -64,6 +77,19 @@
   color: #fff;
 }
 .copy-primary:not(:disabled):hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: #fff;
+}
+
+/* Manifest copy is the main hand-off action on this page, so it keeps the
+   selected/green treatment instead of looking like a secondary ghost button. */
+.copy-manifest:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.copy-manifest:not(:disabled):hover {
   border-color: var(--accent-hover);
   background: var(--accent-hover);
   color: #fff;
@@ -223,7 +249,8 @@
 
 @media (max-width: 760px) {
   .gallery-summary strong { max-width: 100%; }
-  .gallery-actions { width: 100%; }
+  .gallery-actions { width: 100%; margin-left: 0; }
+  .action-divider { display: none; }
   .gallery-actions .ghost-btn, .gallery-actions .quick-btn { flex: 1; }
   .gallery { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   .image-frame { height: 150px; }

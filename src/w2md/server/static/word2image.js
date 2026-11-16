@@ -42,6 +42,12 @@
     "image/bmp", "image/svg+xml"
   ];
   var MAX_CLIPBOARD_IMAGES = 20;
+  // Shown even when the document has no image of that format, so the filter
+  // always reads like a format list instead of only echoing the current file.
+  var COMMON_FORMATS = [
+    "PNG", "JPG", "GIF", "WEBP", "BMP", "SVG",
+    "TIF", "EMF", "WMF", "ICO", "AVIF", "嵌入文件", "其他"
+  ];
 
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
@@ -171,20 +177,29 @@
   }
 
   function populateFormatFilter() {
-    var formats = {};
-    state.images.forEach(function (image) { formats[formatKey(image)] = true; });
-    var names = Object.keys(formats).sort();
+    var counts = {};
+    state.images.forEach(function (image) {
+      var key = formatKey(image);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+
+    var names = COMMON_FORMATS.slice();
+    Object.keys(counts).forEach(function (name) {
+      if (names.indexOf(name) < 0) { names.push(name); }
+    });
 
     formatFilter.innerHTML = "";
     var allOption = document.createElement("option");
     allOption.value = "";
-    allOption.textContent = "全部格式";
+    allOption.textContent = "全部格式（" + state.images.length + "）";
     formatFilter.appendChild(allOption);
 
     names.forEach(function (name) {
+      var count = counts[name] || 0;
       var option = document.createElement("option");
       option.value = name;
-      option.textContent = name;
+      option.textContent = name + "（" + count + "）";
+      option.disabled = count === 0;
       formatFilter.appendChild(option);
     });
 

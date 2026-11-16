@@ -45,15 +45,15 @@ http://127.0.0.1:8000/word2image.html
 
 图片模块说明见 [docs/IMAGE_EXTRACTION.md](docs/IMAGE_EXTRACTION.md)。
 
-## 特殊图片处理与检查
+## Markdown 阅读器（含特殊图片检查）
 
-只处理「上传结果导入」自动回填后残留的 `unsupported` / `oversized` / `conversion_failed` 特殊图片。左侧显示 Markdown，右侧显示 manifest 解析出的特殊图片清单；点击条目可定位并高亮对应占位符，每项独立填写 ShowDoc URL：
+阅读器以本地 Markdown 阅读为主：打开 `.md` 后可对照源码与渲染预览。点击工具栏「检查与修正」，导入 `manifest.json` 即可处理「上传结果导入」后残留的 `unsupported` / `oversized` / `conversion_failed` 特殊图片。点击条目可定位并高亮对应占位符，每项独立填写 ShowDoc URL：
 
 ```text
-http://127.0.0.1:8000/special_images.html
+http://127.0.0.1:8000/mdreader.html
 ```
 
-页面检查普通占位符残留、特殊图片待处理数量、URL 有效性、`occurrence_id` 唯一性和最终占位符残留。输入为 Markdown + `manifest.json`，不接受 `upload_result.json`；普通图片统一由「上传结果导入」处理。命令行：
+检查面板会检查普通占位符残留、特殊图片待处理数量、URL 有效性、`occurrence_id` 唯一性和最终占位符残留。输入为 Markdown + `manifest.json`，不接受 `upload_result.json`；普通图片统一由「上传结果导入」处理。旧的 `special_images.html` 会跳转到阅读器。命令行：
 
 ```powershell
 .tools\python312\python.exe -m w2md replace-special-images output\文档.md --manifest output\assets\manifest.json --urls special_urls.json -o output\final
@@ -69,7 +69,7 @@ http://127.0.0.1:8000/special_images.html
 http://127.0.0.1:8000/upload_result.html
 ```
 
-支持部分成功、严格、只补齐遗留占位符三种模式，输出最终 Markdown、`missing_images.csv`、`replacement_report.json` 和可选的 `missing_images.html`。命令行：
+默认使用「部分成功」：成功图片替换为 URL，失败/未上传/无法匹配的图片保留占位符。严格模式与「只补齐遗留占位符」收在高级选项里。输出最终 Markdown、`missing_images.csv`、`replacement_report.json` 和 `missing_images.html`（页面只直接提供 Markdown 与缺失清单 CSV）。命令行：
 
 ```powershell
 .tools\python312\python.exe -m w2md apply-upload-result output\文档.md `

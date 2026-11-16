@@ -33,16 +33,12 @@ http://127.0.0.1:8000/upload_result.html
 页面操作：
 
 1. 选择带占位符的 Markdown（Word 转 Markdown / 图片提取生成的 `.md`）。
-2. 选择浏览器扩展导出的 `upload_result.json`。
-3. 建议选择同一批图片的 `manifest.json`，用于交叉校验 `document_id`、SHA-256、原图数量和未上传图片。
-4. 可选选择原图或上传副本文件，缺失清单和 `missing_images.html` 会显示缩略图。
-5. 选择处理模式：
-   - **部分成功**（默认）：成功替换，失败 / 未上传 / 无法匹配的图片保留原占位符。
-   - **严格**：只有全部预期图片都成功、manifest 中每个占位符都出现在 Markdown 正文、且没有清单外占位符 / 意外上传时才生成。
-   - **只补齐遗留占位符**：只处理当前 Markdown 中仍存在的占位符，已替换的图片不重新上传、不修改。
-6. 点击「预览替换结果」，逐张查看“成功，替换为 URL / 失败，保留占位符”。
-7. 点击「生成最终 Markdown」。如果仍有缺失，页面会显示缺失数量并再次确认。
-8. 下载最终 Markdown、`missing_images.csv`、`replacement_report.json` 和可选的 `missing_images.html`。
+2. 选择或粘贴浏览器扩展导出的 `upload_result.json`。
+3. 选择或粘贴同一批图片的 `manifest.json`，用于交叉校验 `document_id`、SHA-256、原图数量和未上传图片。manifest 是可选但推荐的输入；不提供时仍可替换，但校验和缺失清单不完整。
+4. 默认按「部分成功」处理：成功替换，失败 / 未上传 / 无法匹配的图片保留原占位符。严格模式、只补齐遗留占位符和「允许不一致后继续」收在「高级选项」里。
+5. 点击「① 一键替换」，逐张查看“成功，替换为 URL / 失败，保留占位符”和定位提示。
+6. 点击「② 生成最终 Markdown」。如果仍有缺失，页面会显示缺失数量并再次确认。
+7. 复制最终 Markdown、下载 `.md` 或下载缺失清单 CSV（用于手动补传失败图片）。命令行还会额外生成 `replacement_report.json` 和 `missing_images.html`。
 
 ## 命令行
 

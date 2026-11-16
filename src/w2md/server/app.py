@@ -369,9 +369,9 @@ class Handler(BaseHTTPRequestHandler):
         styles = (query.get("styles") or ["drop"])[0]
         if styles not in ("html", "drop"):
             styles = "drop"
-        assets = (query.get("assets") or ["folder"])[0]
+        assets = (query.get("assets") or ["placeholder"])[0]
         if assets not in ("folder", "base64", "placeholder"):
-            assets = "folder"
+            assets = "placeholder"
 
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length)

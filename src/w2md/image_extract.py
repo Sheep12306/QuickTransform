@@ -821,10 +821,11 @@ class _DocumentContext:
     """Best-effort section and surrounding text for each image position.
 
     Word does not store "which chapter does this image belong to", so this
-    walks the paragraph stream once: the nearest preceding heading paragraph is
-    the section, the text before/after the image in its own paragraph (or the
-    neighbouring paragraph) is the context.  Everything is truncated because it
-    is only used to help a human locate an image that failed to upload.
+    walks the paragraph stream once: the outermost preceding heading (lowest
+    heading level) is the section, the text before/after the image in its own
+    paragraph (or the neighbouring paragraph) is the context.  Everything is
+    truncated because it is only used to help a human locate an image that
+    failed to upload.
     """
 
     def __init__(self, root, styles):
@@ -850,10 +851,19 @@ class _DocumentContext:
         if not after:
             after = self._neighbour_text(index, 1)
 
+        # Show the outermost heading that contains the image (the largest
+        # heading, e.g. "第 2 章" rather than the nearest H4 sub-heading), so
+        # the locate hint stays short and stable.
         section = ""
+        section_level = None
         for position in range(index, -1, -1):
-            if self.headings[position]:
+            level = self.headings[position]
+            if not level:
+                continue
+            if section_level is None or level < section_level:
                 section = self.texts[position]
+                section_level = level
+            if level == 1:
                 break
 
         return {

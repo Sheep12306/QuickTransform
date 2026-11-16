@@ -50,8 +50,6 @@
           <span id="result-summary"></span>
         </div>
         <div class="gallery-actions">
-          <button class="ghost-btn" id="copy-manifest" type="button" title="复制 manifest.json 内容到剪贴板" disabled>复制 manifest</button>
-          <button class="ghost-btn" id="download-manifest" type="button" title="下载 manifest.json（文件名带原文档名）" disabled>下载 manifest</button>
           <label class="format-filter">
             <span>格式</span>
             <select id="format-filter" aria-label="按图片格式筛选">
@@ -64,6 +62,9 @@
           </label>
           <button class="ghost-btn copy-primary" id="copy-selected" type="button" disabled>复制选中 (0)</button>
           <button class="ghost-btn" id="download-zip" type="button" disabled>打包下载</button>
+          <span class="action-divider" aria-hidden="true"></span>
+          <button class="ghost-btn copy-manifest" id="copy-manifest" type="button" title="复制 manifest.json 内容到剪贴板" disabled>复制 manifest</button>
+          <button class="ghost-btn" id="download-manifest" type="button" title="下载 manifest.json（文件名带原文档名）" disabled>下载 manifest</button>
           <button class="icon-btn" id="reset-btn" type="button" title="重新选择" aria-label="重新选择">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>

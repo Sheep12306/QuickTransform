@@ -1,31 +1,33 @@
+/* Optional check/repair features for the Markdown reader.
+   The reader itself is the primary surface; this script only manages the
+   collapsible panel and never changes the reader unless "应用到阅读器" is used. */
 (function () {
-  var markdownFile = document.getElementById("markdown-file");
+  var source = document.getElementById("source");
+  var checkToggle = document.getElementById("check-toggle");
+  var checkPanel = document.getElementById("check-panel");
+  var checkSub = document.getElementById("check-sub");
   var manifestFile = document.getElementById("manifest-file");
-  var markdownText = document.getElementById("markdown-text");
-  var markdownName = document.getElementById("markdown-name");
   var manifestName = document.getElementById("manifest-name");
-  var mdStats = document.getElementById("md-stats");
-  var markdownCard = document.getElementById("markdown-card");
   var specialList = document.getElementById("special-list");
   var analyzeBtn = document.getElementById("analyze-btn");
   var generateBtn = document.getElementById("generate-btn");
-  var clearBtn = document.getElementById("clear-btn");
+  var checkHint = document.getElementById("check-hint");
+  var clearCheckBtn = document.getElementById("clear-check");
   var resultPanel = document.getElementById("result-panel");
   var resultText = document.getElementById("result-text");
   var resultNote = document.getElementById("result-note");
   var copyResult = document.getElementById("copy-result");
   var downloadMd = document.getElementById("download-md");
+  var applyResult = document.getElementById("apply-result");
   var downloadManifest = document.getElementById("download-manifest");
-  var downloadReport = document.getElementById("download-report");
   var toastEl = document.getElementById("toast");
 
-  var EMPTY_HINT = "选择 manifest.json 后，这里会列出 unsupported / oversized / conversion_failed 图片。";
-  var MANIFEST_HINT = "未加载 manifest（无法生成特殊图片清单）";
+  var EMPTY_HINT = "导入 manifest.json 后，这里会列出 unsupported / oversized / conversion_failed 图片。";
+  var MANIFEST_HINT = "未导入 manifest（检查功能不可用）";
 
   var state = {
-    markdownFilename: "",
-    manifestFilename: "",
     manifest: null,
+    manifestFilename: "",
     urls: {},
     analysis: null,
     result: null,
@@ -35,6 +37,7 @@
     activePlaceholder: "",
     analyzeTimer: null,
     analyzeSeq: 0,
+    applying: false,
     toastTimer: null
   };
 
@@ -83,7 +86,7 @@
 
   function payload() {
     return {
-      markdown: markdownText.value,
+      markdown: source.value,
       manifest: state.manifest,
       urls: state.urls
     };
@@ -108,7 +111,11 @@
 
   function analyze(showToast) {
     if (!state.manifest) {
-      toast("请先拖入或选择 manifest.json", true);
+      toast("请先在检查面板导入 manifest.json", true);
+      return;
+    }
+    if (!source.value.trim()) {
+      toast("请先打开或粘贴 Markdown 源码", true);
       return;
     }
     var sequence = ++state.analyzeSeq;
@@ -158,9 +165,9 @@
         number(counts.special_images) + " 张）";
     }
 
-    var lines = markdownText.value ? markdownText.value.split(/\r\n|\r|\n/).length : 0;
-    mdStats.textContent =
-      lines + " 行 · 特殊占位符 " + number(counts.in_markdown) +
+    checkSub.textContent =
+      "特殊占位符 " + number(counts.in_markdown) +
+      " 个 · 待处理 " + number(counts.pending) +
       " 个 · 普通占位符残留 " + number(counts.normal_residue_occurrences) + " 个";
 
     renderChecks(analysis);
@@ -168,6 +175,9 @@
     renderMessages("warning-list", analysis.warnings || []);
     renderList(analysis);
     generateBtn.disabled = !analysis.can_generate;
+    checkHint.textContent = analysis.can_generate
+      ? "检查通过，可以生成修正后的 Markdown"
+      : "填写 URL 后会自动检查；仍有待处理项时不能生成";
   }
 
   function renderChecks(analysis) {
@@ -175,7 +185,7 @@
     var normal = number(counts.normal_residue_occurrences);
     setCheck(
       "check-normal",
-      normal ? String(normal) : "0",
+      String(normal),
       normal ? "存在残留，请先完成普通图片回填" : "无残留",
       normal ? "error" : "ok"
     );
@@ -239,10 +249,9 @@
       );
       return;
     }
-    var remaining = number(check.remaining_total);
     setCheck(
       "check-final",
-      String(remaining),
+      String(number(check.remaining_total)),
       "未通过，仍有占位符残留",
       "error"
     );
@@ -422,6 +431,7 @@
 
     var pieces = [item.occurrence_id || "无 occurrence_id"];
     if (item.file_name) { pieces.push(item.file_name); }
+    if (item.section) { pieces.push(item.section); }
     if (item.in_markdown) {
       pieces.push("第 " + item.line + " 行 × " + item.occurrence_count);
     } else if (item.code_occurrence_count) {
@@ -469,25 +479,27 @@
       );
     });
 
-    var start = offsetForLineColumn(markdownText.value, occurrence.line, occurrence.column);
+    var start = offsetForLineColumn(source.value, occurrence.line, occurrence.column);
     var end = start + item.placeholder.length;
-    markdownText.focus();
-    markdownText.setSelectionRange(start, end);
+    source.focus({ preventScroll: true });
+    source.setSelectionRange(start, end);
 
-    // Wrapped lines mean pixel offsets per line vary; scroll by line ratio so
-    // the target stays close even in long documents.
-    var totalLines = markdownText.value.split(/\r\n|\r|\n/).length;
-    var maxScroll = Math.max(0, markdownText.scrollHeight - markdownText.clientHeight);
+    var totalLines = source.value.split(/\r\n|\r|\n/).length;
+    var maxScroll = Math.max(0, source.scrollHeight - source.clientHeight);
     if (totalLines > 1 && maxScroll > 0) {
       var ratio = (occurrence.line - 1) / (totalLines - 1);
-      markdownText.scrollTop = Math.max(
+      source.scrollTop = Math.max(
         0,
-        Math.min(maxScroll, ratio * maxScroll - markdownText.clientHeight * 0.3)
+        Math.min(maxScroll, ratio * maxScroll - source.clientHeight * 0.3)
       );
     }
 
-    markdownCard.classList.add("flash");
-    setTimeout(function () { markdownCard.classList.remove("flash"); }, 900);
+    var pane = source.closest(".pane");
+    if (pane) {
+      pane.classList.add("flash");
+      setTimeout(function () { pane.classList.remove("flash"); }, 900);
+      pane.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
 
     if (card && card.scrollIntoView) {
       card.scrollIntoView({ block: "nearest" });
@@ -554,16 +566,13 @@
       notes.push("代码块中跳过 " + data.skipped_code_count + " 个");
     }
     var check = data.final_check || {};
-    notes.push(
-      check.passed
-        ? "最终占位符残留检查通过"
-        : "最终占位符残留检查未通过"
-    );
+    notes.push(check.passed ? "最终占位符残留检查通过" : "最终占位符残留检查未通过");
     if ((data.warnings || []).length) {
       notes.push(data.warnings.join("；"));
     }
     resultNote.textContent = notes.join("；");
     downloadManifest.disabled = !data.updated_manifest;
+    checkHint.textContent = "已生成修正后的 Markdown";
     show(resultPanel);
     resultPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -574,14 +583,27 @@
       return;
     }
     navigator.clipboard.writeText(resultText.value).then(function () {
-      toast("已复制最终 Markdown");
+      toast("已复制修正后的 Markdown");
     }).catch(function (error) {
       toast("复制失败：" + (error.message || error), true);
     });
   }
 
+  function applyToReader() {
+    if (!state.result || !state.result.markdown) {
+      toast("请先生成修正后的 Markdown", true);
+      return;
+    }
+    state.applying = true;
+    source.value = state.result.markdown;
+    source.dispatchEvent(new Event("input", { bubbles: true }));
+    state.applying = false;
+    toast("已应用到阅读器，源码和预览已更新");
+    if (state.manifest) { analyze(false); }
+  }
+
   function baseName() {
-    var name = state.markdownFilename || "document";
+    var name = document.getElementById("report-file").textContent || "document";
     return name.replace(/\.(md|markdown)$/i, "") || "document";
   }
 
@@ -597,19 +619,14 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
-  function clearAll() {
+  function resetCheckState() {
     cancelAnalyze();
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = "重新检查";
-    markdownFile.value = "";
     manifestFile.value = "";
-    markdownText.value = "";
-    markdownName.textContent = "";
     manifestName.textContent = MANIFEST_HINT;
-    mdStats.textContent = "拖入 .md 文件，或直接粘贴源码";
-    state.markdownFilename = "";
-    state.manifestFilename = "";
     state.manifest = null;
+    state.manifestFilename = "";
     state.urls = {};
     state.analysis = null;
     state.lastFinalCheck = null;
@@ -625,25 +642,41 @@
     document.getElementById("count-special").textContent = "0";
     document.getElementById("count-in-markdown").textContent = "0";
     document.getElementById("count-pending").textContent = "0";
+    checkSub.textContent = "导入 manifest 后，可检查并补齐 unsupported / oversized / conversion_failed 图片";
     renderMessages("error-list", []);
     renderMessages("warning-list", []);
     setIdleChecks();
     generateBtn.disabled = true;
+    checkHint.textContent = "填写图片 URL 后会自动检查";
   }
 
-  markdownFile.addEventListener("change", function () {
-    if (!markdownFile.files.length) { return; }
-    var file = markdownFile.files[0];
-    state.markdownFilename = file.name;
-    markdownName.textContent = "已加载：" + file.name;
-    readTextFile(file, function (text) {
-      cancelAnalyze();
-      markdownText.value = text;
-      state.listSignature = "";
-      resetResult();
-      mdStats.textContent = text.split(/\r\n|\r|\n/).length + " 行";
-      if (state.manifest) { analyze(false); }
-    });
+  function applyManifest(parsed, label) {
+    state.manifest = parsed;
+    state.manifestFilename = label || "";
+    state.urls = {};
+    state.listSignature = "";
+    resetResult();
+    var count = parsed && Array.isArray(parsed.images) ? parsed.images.length : 0;
+    manifestName.textContent = "已加载：" + (label || "manifest.json") +
+      "（" + count + " 张图片，正在检查…）";
+    if (source.value.trim()) {
+      analyze(false);
+    }
+  }
+
+  checkToggle.addEventListener("click", function () {
+    var willOpen = checkPanel.classList.contains("hidden");
+    checkPanel.classList.toggle("hidden");
+    checkToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    checkToggle.textContent = willOpen ? "收起检查" : "检查与修正";
+    if (willOpen) {
+      checkPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!state.manifest) {
+        toast("导入 manifest.json 后即可检查特殊图片");
+      } else if (source.value.trim()) {
+        analyze(false);
+      }
+    }
   });
 
   manifestFile.addEventListener("change", function () {
@@ -655,40 +688,30 @@
       try {
         parsed = JSON.parse(text);
       } catch (error) {
-        manifestName.textContent = state.manifest
-          ? "manifest.json 解析失败，保留当前清单"
-          : "manifest.json 解析失败";
-        analyzeBtn.disabled = false;
-        analyzeBtn.textContent = "重新检查";
         toast("manifest.json 解析失败：" + (error.message || error), true);
         return;
       }
-      state.manifest = parsed;
-      state.manifestFilename = file.name;
-      state.urls = {};
-      state.listSignature = "";
-      resetResult();
-      var count = (parsed.images || []).length;
-      manifestName.textContent =
-        "已加载：" + file.name + "（" + count + " 张图片，正在检查特殊图片…）";
-      analyze(false);
+      applyManifest(parsed, file.name);
     });
   });
 
-  markdownText.addEventListener("input", function () {
+  source.addEventListener("input", function () {
+    if (state.applying) { return; }
     resetResult();
-    var lines = markdownText.value ? markdownText.value.split(/\r\n|\r|\n/).length : 0;
-    mdStats.textContent = lines + " 行";
     if (state.manifest) { scheduleAnalyze(); }
   });
 
   analyzeBtn.addEventListener("click", function () { analyze(true); });
   generateBtn.addEventListener("click", generate);
-  clearBtn.addEventListener("click", clearAll);
+  clearCheckBtn.addEventListener("click", resetCheckState);
   copyResult.addEventListener("click", copyResultText);
+  applyResult.addEventListener("click", applyToReader);
 
   downloadMd.addEventListener("click", function () {
-    if (!resultText.value) { return; }
+    if (!resultText.value) {
+      toast("请先生成修正后的 Markdown", true);
+      return;
+    }
     downloadText(baseName() + ".special.md", resultText.value, "text/markdown;charset=utf-8");
   });
 
@@ -704,26 +727,22 @@
     );
   });
 
-  downloadReport.addEventListener("click", function () {
-    if (!state.result) {
-      toast("请先生成最终 Markdown", true);
-      return;
-    }
-    var report = {
-      analysis: state.analysis,
-      replacement: {
-        replaced_count: state.result.replaced_count,
-        skipped_code_count: state.result.skipped_code_count,
-        warnings: state.result.warnings || []
-      },
-      final_check: state.result.final_check
-    };
-    downloadText(
-      baseName() + ".special.report.json",
-      JSON.stringify(report, null, 2),
-      "application/json;charset=utf-8"
-    );
+  document.addEventListener("qt:reader-file-loaded", function () {
+    resetCheckState();
+    hide(checkPanel);
+    checkToggle.setAttribute("aria-expanded", "false");
+    checkToggle.textContent = "检查与修正";
   });
+
+  var resetBtn = document.getElementById("reset-btn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function () {
+      resetCheckState();
+      hide(checkPanel);
+      checkToggle.setAttribute("aria-expanded", "false");
+      checkToggle.textContent = "检查与修正";
+    });
+  }
 
   setIdleChecks();
 })();

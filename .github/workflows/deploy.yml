@@ -48,7 +48,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            'rm -f /opt/quicktransform/src/w2md/server/static/placeholder_replace.html /opt/quicktransform/src/w2md/server/static/placeholder_replace.js; systemctl restart quicktransform && sleep 3 && systemctl is-active quicktransform'
+            'rm -f /opt/quicktransform/src/w2md/server/static/placeholder_replace.html /opt/quicktransform/src/w2md/server/static/placeholder_replace.js /opt/quicktransform/src/w2md/server/static/special_images.js; systemctl restart quicktransform && sleep 3 && systemctl is-active quicktransform'
           rc=$?
           echo "ssh rc=$rc"
           exit $rc

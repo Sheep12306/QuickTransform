@@ -182,6 +182,7 @@
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   margin-bottom: 20px;
+  scroll-margin-top: 84px;
 }
 .result-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .result-actions .ghost-btn { padding: 5px 9px; font-size: 12px; }
